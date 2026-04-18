@@ -2,14 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const { sequelize } = require('./models');
 const authController = require('./controllers/authController');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 app.use(express.json());
 
-app.post('/api/auth/register', authController.register);
-app.post('/api/auth/login', authController.login);
-app.post('/api/auth/refresh', authController.refreshToken);
-app.post('/api/auth/logout', authController.logout);
+app.use('/api/auth', authRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });
