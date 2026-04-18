@@ -22,15 +22,18 @@ const InventoryTransaction = require('./InventoryTransaction');
 
 //Users - Roles (M:N)
 User.belongsToMany(Role, {
-    through: UserRole,
-    foreignKey: 'user_id',
-    otherKey: 'role_id'
+  through: UserRole,
+  foreignKey: 'user_id',
+  otherKey: 'role_id'
 });
 Role.belongsToMany(User, {
-    through: UserRole,
-    foreignKey: 'role_id',
-    otherKey: 'user_id'
+  through: UserRole,
+  foreignKey: 'role_id',
+  otherKey: 'user_id'
 });
+
+UserRole.belongsTo(User, { foreignKey: 'user_id' });
+UserRole.belongsTo(Role, { foreignKey: 'role_id' });
 
 //UserClaim, UserToken, RefreshToken
 User.hasMany(UserClaim, {
@@ -41,12 +44,12 @@ User.hasMany(UserClaim, {
 UserClaim.belongsTo(User, { foreignKey: 'user_id' });
 
 User.hasMany(UserToken, {
-    foreignKey: 'user_id',
-    onDelete: 'CASCADE',
-    onUpdate: 'CASCADE'
+  foreignKey: 'user_id',
+  onDelete: 'CASCADE',
+  onUpdate: 'CASCADE'
 });
 UserToken.belongsTo(User, {
-    foreignKey: 'user_id'
+  foreignKey: 'user_id'
 });
 
 User.hasMany(RefreshToken, {
@@ -54,22 +57,22 @@ User.hasMany(RefreshToken, {
   onDelete: 'CASCADE',
   onUpdate: 'CASCADE'
 });
-RefreshToken.belongsTo(User, { 
-    foreignKey: 'user_id'
+RefreshToken.belongsTo(User, {
+  foreignKey: 'user_id'
 });
 
 //1-1
 User.hasOne(Dentist, {
-    foreignKey: 'user_id',
-    onDelete: 'RESTRICT',
-    onUpdate: 'CASCADE'
+  foreignKey: 'user_id',
+  onDelete: 'RESTRICT',
+  onUpdate: 'CASCADE'
 });
 Dentist.belongsTo(User, { foreignKey: 'user_id' });
 
 User.hasOne(Patient, {
-    foreignKey: 'user_id',
-    onDelete: 'RESTRICT',
-    onUpdate: 'CASCADE'
+  foreignKey: 'user_id',
+  onDelete: 'RESTRICT',
+  onUpdate: 'CASCADE'
 });
 Patient.belongsTo(User, { foreignKey: 'user_id' });
 
@@ -194,24 +197,24 @@ InventoryItem.hasMany(InventoryTransaction, {
 InventoryTransaction.belongsTo(InventoryItem, { foreignKey: 'item_id' });
 
 module.exports = {
-    sequelize,
-    User,
-    Role,
-    UserRole,
-    UserClaim,
-    UserToken,
-    RefreshToken,
-    Dentist,
-    Patient,
-    Appointment,
-    Treatment,
-    PatientTreatment,
-    DentalRecord,
-    Invoice,
-    Payment,
-    InvoiceItem,
-    WorkSchedule,
-    Reminder,
-    InventoryItem,
-    InventoryTransaction
+  sequelize,
+  User,
+  Role,
+  UserRole,
+  UserClaim,
+  UserToken,
+  RefreshToken,
+  Dentist,
+  Patient,
+  Appointment,
+  Treatment,
+  PatientTreatment,
+  DentalRecord,
+  Invoice,
+  Payment,
+  InvoiceItem,
+  WorkSchedule,
+  Reminder,
+  InventoryItem,
+  InventoryTransaction
 };
