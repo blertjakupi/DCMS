@@ -30,6 +30,10 @@ const PatientTreatment = sequelize.define('PatientTreatment', {
   dentist_id: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  cost: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
   }
 }, {
   tableName: 'patient_treatments',
