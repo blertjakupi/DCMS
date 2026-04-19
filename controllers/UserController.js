@@ -4,8 +4,12 @@ const {
   sequelize,
   User,
   Role,
-  UserRole
+  UserRole,
+  RefreshToken
 } = require('../models');
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const allowedStatuses = ['Active', 'Inactive'];
 
 const userController = {
   getAll: async (req, res) => {
@@ -85,10 +89,31 @@ const userController = {
         });
       }
 
+      if (!emailRegex.test(email)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Email nuk është në format valid.'
+        });
+      }
+
       if (password.length < 8) {
         await transaction.rollback();
         return res.status(400).json({
           message: 'Password duhet të ketë të paktën 8 karaktere.'
+        });
+      }
+
+      if (!role_ids || !Array.isArray(role_ids) || role_ids.length === 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Të paktën një rol duhet të caktohet për përdoruesin.'
+        });
+      }
+
+      if (status && !allowedStatuses.includes(status)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Statusi nuk është valid.'
         });
       }
 
@@ -101,6 +126,18 @@ const userController = {
         await transaction.rollback();
         return res.status(400).json({
           message: 'Email ekziston tashmë.'
+        });
+      }
+
+      const roles = await Role.findAll({
+        where: { role_id: { [Op.in]: role_ids } },
+        transaction
+      });
+
+      if (roles.length !== role_ids.length) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Një ose më shumë role nuk u gjetën.'
         });
       }
 
@@ -122,27 +159,13 @@ const userController = {
         { transaction }
       );
 
-      if (role_ids && Array.isArray(role_ids) && role_ids.length > 0) {
-        const roles = await Role.findAll({
-          where: { role_id: { [Op.in]: role_ids } },
-          transaction
-        });
+      const userRoles = role_ids.map((role_id) => ({
+        user_id: newUser.user_id,
+        role_id
+      }));
 
-        if (roles.length !== role_ids.length) {
-          await transaction.rollback();
-          return res.status(400).json({
-            message: 'Një ose më shumë role nuk u gjetën.'
-          });
-        }
-
-        const userRoles = role_ids.map((role_id) => ({
-          user_id: newUser.user_id,
-          role_id
-        }));
-
-        await UserRole.bulkCreate(userRoles, { transaction });
-      }
-
+      await UserRole.bulkCreate(userRoles, { transaction });
+      
       await transaction.commit();
 
       const createdUser = await User.findOne({
@@ -192,21 +215,37 @@ const userController = {
         });
       }
 
-      if (email && email !== user.email) {
-        const existingUser = await User.findOne({
-          where: {
-            email,
-            user_id: { [Op.ne]: id }
-          },
-          transaction
-        });
-
-        if (existingUser) {
+      if (email) {
+        if (!emailRegex.test(email)) {
           await transaction.rollback();
           return res.status(400).json({
-            message: 'Email ekziston tashmë.'
+            message: 'Email nuk është në format valid.'
           });
         }
+
+        if (email !== user.email) {
+          const existingUser = await User.findOne({
+            where: {
+              email,
+              user_id: { [Op.ne]: id }
+            },
+            transaction
+          });
+
+          if (existingUser) {
+            await transaction.rollback();
+            return res.status(400).json({
+              message: 'Email ekziston tashmë.'
+            });
+          }
+        }
+      }
+
+      if (status && !allowedStatuses.includes(status)) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Statusi nuk është valid.'
+        });
       }
 
       const updateData = {};
@@ -258,6 +297,7 @@ const userController = {
   },
 
   delete: async (req, res) => {
+    const transaction = await sequelize.transaction();
     try {
       const { id } = req.params;
 
@@ -265,24 +305,43 @@ const userController = {
         where: {
           user_id: id,
           is_deleted: false
-        }
+        },
+        transaction
       });
 
       if (!user) {
+        await transaction.rollback();
         return res.status(404).json({
           message: 'Përdoruesi nuk u gjet.'
         });
       }
 
-      await user.update({
-        is_deleted: true,
-        status: 'Inactive'
-      });
+      await user.update(
+        {
+          is_deleted: true,
+          status: 'Inactive'
+        },
+        { transaction }
+      );
+
+      await RefreshToken.update(
+        { revoked_at: new Date() },
+        {
+          where: {
+            user_id: user.user_id,
+            revoked_at: null
+          },
+          transaction
+        }
+      );
+
+      await transaction.commit();
 
       return res.status(200).json({
         message: 'Përdoruesi u fshi me sukses.'
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('DELETE USER ERROR:', error);
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë fshirjes së përdoruesit.'
@@ -304,6 +363,12 @@ const userController = {
       if (!user) {
         return res.status(404).json({
           message: 'Përdoruesi nuk u gjet.'
+        });
+      }
+
+      if (!user.lockout_enabled && user.access_failed_count === 0) {
+        return res.status(400).json({
+          message: 'Përdoruesi nuk është i bllokuar.'
         });
       }
 

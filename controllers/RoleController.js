@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const {
   sequelize,
   Role,
@@ -52,13 +53,14 @@ const roleController = {
     try {
       const { role_name, description } = req.body;
 
-      if (!role_name) {
+      if (!role_name || !role_name.trim()) {
         return res.status(400).json({
           message: 'role_name është e detyrueshme.'
         });
       }
 
-      const normalized_name = role_name.toUpperCase().trim();
+      const cleanedRoleName = role_name.trim();
+      const normalized_name = cleanedRoleName.toUpperCase();
 
       const existingRole = await Role.findOne({
         where: { normalized_name }
@@ -71,9 +73,9 @@ const roleController = {
       }
 
       const newRole = await Role.create({
-        role_name: role_name.trim(),
+        role_name: cleanedRoleName,
         normalized_name,
-        description: description || null
+        description: description ? description.trim() : null
       });
 
       return res.status(201).json({
@@ -103,13 +105,20 @@ const roleController = {
 
       const updateData = {};
 
-      if (role_name) {
-        const normalized_name = role_name.toUpperCase().trim();
+      if (role_name !== undefined) {
+        if(!role_name.trim()) {
+          return res.status(400).json({
+            message: 'role_name nuk mund të jetë bosh.'
+          });
+        }
+
+        const cleanedRoleName = role_name.trim();
+        const normalized_name = cleanedRoleName.toUpperCase();
 
         const existingRole = await Role.findOne({
           where: {
             normalized_name,
-            role_id: { [require('sequelize').Op.ne]: id }
+            role_id: { [Op.ne]: id }
           }
         });
 
@@ -119,12 +128,12 @@ const roleController = {
           });
         }
 
-        updateData.role_name = role_name.trim();
+        updateData.role_name = cleanedRoleName;
         updateData.normalized_name = normalized_name;
       }
 
       if (description !== undefined) {
-        updateData.description = description;
+        updateData.description = description ? description.trim() : null;
       }
 
       await role.update(updateData);

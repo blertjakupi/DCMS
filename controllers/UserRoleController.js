@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const {
   sequelize,
   User,
@@ -12,7 +13,9 @@ const userRoleController = {
         include: [
           {
             model: User,
-            attributes: ['user_id', 'first_name', 'last_name', 'email']
+            attributes: ['user_id', 'first_name', 'last_name', 'email'],
+            where: { is_deleted: false },
+            required: false
           },
           {
             model: Role,
@@ -158,41 +161,51 @@ const userRoleController = {
   },
 
   remove: async (req, res) => {
+    const transaction = await sequelize.transaction();
+
     try {
       const { user_id, role_id } = req.body;
 
       if (!user_id || !role_id) {
+        await transaction.rollback();
         return res.status(400).json({
           message: 'user_id dhe role_id janë të detyrueshme.'
         });
       }
 
       const userRole = await UserRole.findOne({
-        where: { user_id, role_id }
+        where: { user_id, role_id },
+        transaction
       });
 
       if (!userRole) {
+        await transaction.rollback();
         return res.status(404).json({
           message: 'Caktimi i rolit nuk u gjet.'
         });
       }
 
       const roleCount = await UserRole.count({
-        where: { user_id }
+        where: { user_id },
+        transaction
       });
 
       if (roleCount <= 1) {
+        await transaction.rollback();
         return res.status(400).json({
           message: 'Përdoruesi duhet të ketë të paktën një rol. Nuk mund të hiqet roli i fundit.'
         });
       }
 
-      await userRole.destroy();
+      await userRole.destroy({ transaction });
+
+      await transaction.commit();
 
       return res.status(200).json({
         message: 'Roli u hoq me sukses nga përdoruesi.'
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('REMOVE ROLE ERROR:', error);
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë heqjes së rolit.'
@@ -230,7 +243,7 @@ const userRoleController = {
       }
 
       const roles = await Role.findAll({
-        where: { role_id: { [require('sequelize').Op.in]: role_ids } },
+        where: { role_id: { [Op.in]: role_ids } },
         transaction
       });
 
