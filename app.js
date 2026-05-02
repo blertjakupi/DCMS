@@ -12,6 +12,9 @@ const workScheduleRoutes = require('./routes/workScheduleRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const treatmentRoutes = require('./routes/treatmentRoutes');
 const patientTreatmentRoutes = require('./routes/patientTreatmentRoutes');
+const invoiceItemRoutes = require('./routes/invoiceItemRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 app.use(express.json());
@@ -26,6 +29,9 @@ app.use('/api/work-schedules', workScheduleRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/treatments', treatmentRoutes);
 app.use('/api/patient-treatments', patientTreatmentRoutes);
+app.use('/api/invoice-items', invoiceItemRoutes);
+app.use('/api/invoices',invoiceRoutes)
+app.use('/api/payments', paymentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });
