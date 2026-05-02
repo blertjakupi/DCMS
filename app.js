@@ -15,6 +15,10 @@ const patientTreatmentRoutes = require('./routes/patientTreatmentRoutes');
 const invoiceItemRoutes = require('./routes/invoiceItemRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const dentalRecordRoutes = require('./routes/dentalRecordRoutes');
+const reminderRoutes = require('./routes/reminderRoutes');
+const inventoryItemRoutes = require('./routes/inventoryItemRoutes');
+const inventoryTransactionRoutes = require('./routes/inventoryTransactionRoutes');
 
 const app = express();
 app.use(express.json());
@@ -32,6 +36,10 @@ app.use('/api/patient-treatments', patientTreatmentRoutes);
 app.use('/api/invoice-items', invoiceItemRoutes);
 app.use('/api/invoices',invoiceRoutes)
 app.use('/api/payments', paymentRoutes);
+app.use('/api/dental-records', dentalRecordRoutes);
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/inventory-items', inventoryItemRoutes);
+app.use('/api/inventory-transactions', inventoryTransactionRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });
