@@ -33,12 +33,8 @@ const UserToken = sequelize.define('UserToken', {
     tableName: 'user_tokens',
     timestamps: false,
     indexes: [
-        {
-            fields: ['user_id']
-        },
-        {
-            fields: ['token_value']   
-        },
+        
+        
         {
         	unique: true, 
            fields: ['user_id', 'login_provider', 'token_name']
