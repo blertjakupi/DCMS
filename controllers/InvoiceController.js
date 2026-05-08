@@ -1,4 +1,4 @@
-const { Invoice, Patient, Appointment, InvoiceItem, Payment, Treatment } = require('../models');
+const { sequelize, Invoice, Patient, Appointment, InvoiceItem, Payment, Treatment } = require('../models');
 const { Op } = require('sequelize');
 
 async function recalcInvoiceTotal(invoiceId) {
@@ -180,5 +180,38 @@ exports.deleteInvoice = async (req, res) => {
     await t.rollback(); 
     console.error(error);
     res.status(500).json({ message: 'Server error deleting invoice' });
+  }
+};
+
+exports.recalculateTotal = async (req, res) => {
+  try {
+
+    const { id } = req.params;
+
+    const invoice = await Invoice.findByPk(id);
+
+    if (!invoice) {
+      return res.status(404).json({
+        message: 'Invoice not found'
+      });
+    }
+
+    const total = await recalcInvoiceTotal(id);
+
+    await updateInvoiceStatus(id);
+
+    return res.status(200).json({
+      message: 'Invoice total recalculated successfully',
+      total_amount: total
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: 'Server error recalculating invoice'
+    });
+
   }
 };

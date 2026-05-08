@@ -11,6 +11,10 @@ const Reminder = sequelize.define('Reminder', {
     type: DataTypes.STRING(50),
     allowNull: false
   },
+  send_at: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
   sent_date: {
     type: DataTypes.DATE,
     allowNull: true
@@ -21,6 +25,10 @@ const Reminder = sequelize.define('Reminder', {
     defaultValue: 'Pending'
   },
   appointment_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  patient_id: {
     type: DataTypes.INTEGER,
     allowNull: false
   }

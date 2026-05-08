@@ -19,6 +19,7 @@ const WorkSchedule = require('./WorkSchedule');
 const Reminder = require('./Reminder');
 const InventoryItem = require('./InventoryItem');
 const InventoryTransaction = require('./InventoryTransaction');
+const DentistAvailability = require('./DentistAvailability');
 
 //Users - Roles (M:N)
 User.belongsToMany(Role, {
@@ -31,7 +32,6 @@ Role.belongsToMany(User, {
   foreignKey: 'role_id',
   otherKey: 'user_id'
 });
-
 UserRole.belongsTo(User, { foreignKey: 'user_id' });
 UserRole.belongsTo(Role, { foreignKey: 'role_id' });
 
@@ -196,6 +196,20 @@ InventoryItem.hasMany(InventoryTransaction, {
 });
 InventoryTransaction.belongsTo(InventoryItem, { foreignKey: 'item_id' });
 
+Dentist.hasMany(DentistAvailability, {
+   foreignKey: 'dentist_id'
+});
+DentistAvailability.belongsTo(Dentist, {
+   foreignKey: 'dentist_id'
+});
+
+Treatment.hasMany(Appointment, {
+   foreignKey: 'treatment_id'
+});
+Appointment.belongsTo(Treatment, {
+   foreignKey: 'treatment_id'
+});
+
 module.exports = {
   sequelize,
   User,
@@ -216,5 +230,6 @@ module.exports = {
   WorkSchedule,
   Reminder,
   InventoryItem,
-  InventoryTransaction
+  InventoryTransaction,
+  DentistAvailability
 };

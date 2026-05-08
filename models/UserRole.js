@@ -9,11 +9,23 @@ const UserRole = sequelize.define('UserRole', {
   },
   user_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'user_id'
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
   },
   role_id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    references: {
+      model: 'roles',
+      key: 'role_id'
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
   }
 }, {
   tableName: 'user_roles',

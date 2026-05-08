@@ -17,6 +17,55 @@ const updateInvoiceTotal = async (invoice_id, transaction) => {
   );
 };
 
+exports.getAllInvoiceItems = async (req, res) => {
+  try {
+    const items = await InvoiceItem.findAll({
+      include: [
+        {
+          model: Invoice
+        },
+        {
+          model: Treatment
+        }
+      ]
+    });
+    res.status(200).json(items);
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server error'
+    });
+  }
+};
+
+exports.getInvoiceItemById = async (req, res) => {
+  try {
+
+    const { id } = req.params;
+
+    const item = await InvoiceItem.findByPk(id, {
+      include: [
+        {
+          model: Invoice
+        },
+        {
+          model: Treatment
+        }
+      ]
+    });
+    
+    if (!item) {
+      return res.status(404).json({
+        message: 'Invoice item not found'
+      });
+    }
+    res.status(200).json(item);
+  } catch (error) {
+    res.status(500).json({
+      message: 'Server error'
+    });
+  }
+};
+
 exports.createInvoiceItem = async (req, res) => {
   const t = await sequelize.transaction();
   try {

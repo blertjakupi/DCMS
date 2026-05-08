@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { sequelize } = require('./models');
+sequelize.sync({ force: false });
 const authController = require('./controllers/authController');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');

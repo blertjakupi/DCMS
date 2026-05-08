@@ -4,6 +4,7 @@ const {
   Patient,
   Dentist
 } = require('../models');
+const appointmentService = require('../services/appointmentService');
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
 
@@ -214,7 +215,7 @@ const appointmentController = {
         dentist_id,
         appointment_date,
         appointment_time,
-        duration,
+        treatment_id,
         notes,
         status
       } = req.body;
@@ -280,41 +281,47 @@ const appointmentController = {
         });
       }
 
-      const newAppointment = await Appointment.create({
-        patient_id,
-        dentist_id,
-        appointment_date,
-        appointment_time,
-        duration,
-        notes: notes || null,
-        status: status || 'Scheduled'
-      });
+      try {
+        const newAppointment = await appointmentService.createAppointment(req.body);
 
-      const createdAppointment = await Appointment.findOne({
-        where: { appointment_id: newAppointment.appointment_id },
-        include: [
-          {
-            model: Patient,
-            attributes: ['patient_id', 'first_name', 'last_name']
-          },
-          {
-            model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
-          }
-        ]
-      });
+        return res.status(201).json({
+          message: 'Termini u krijua me sukses.',
+          data: newAppointment
+        });
 
-      return res.status(201).json({
-        message: 'Termini u krijua me sukses.',
-        data: createdAppointment
-      });
-    } catch (error) {
-      console.error('CREATE APPOINTMENT ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm gjatë krijimit të terminit.'
-      });
-    }
-  },
+      }catch (error) {
+          console.error('CREATE APPOINTMENT ERROR:', error);
+
+          return res.status(400).json({
+            message: error.message
+          });
+      }
+
+        const createdAppointment = await Appointment.findOne({
+          where: { appointment_id: newAppointment.appointment_id },
+          include: [
+            {
+              model: Patient,
+              attributes: ['patient_id', 'first_name', 'last_name']
+            },
+            {
+              model: Dentist,
+              attributes: ['dentist_id', 'first_name', 'last_name']
+            }
+          ]
+        });
+
+        return res.status(201).json({
+          message: 'Termini u krijua me sukses.',
+          data: createdAppointment
+        });
+      } catch (error) {
+        console.error('CREATE APPOINTMENT ERROR:', error);
+        return res.status(500).json({
+          message: 'Gabim i brendshëm gjatë krijimit të terminit.'
+        });
+      }
+    },
 
   update: async (req, res) => {
     try {

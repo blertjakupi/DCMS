@@ -35,6 +35,10 @@ const Appointment = sequelize.define('Appointment', {
   patient_id: {
     type: DataTypes.INTEGER,
     allowNull: false
+  },
+  treatment_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
   }
 }, {
   tableName: 'appointments',
