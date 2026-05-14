@@ -24,10 +24,6 @@ const inventoryTransactionRoutes = require('./routes/inventoryTransactionRoutes'
 const app = express();
 app.use(express.json());
 
-// test api call per me shiku a po funksionon lidhja me front - fshije pas testimit
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Hello from backend on port 5000!' });
-});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

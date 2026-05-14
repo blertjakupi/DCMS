@@ -1,21 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import RegisterPage from './pages/RegisterPage';
+import LoginPage from './pages/LoginPage';
+import Dashboard from './pages/Dashboard';
+import PrivateRoute from './components/PrivateRoute';
 
 function App() {
-  const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    fetch('/api/test')   // This will be proxied to http://localhost:5000/api/test
-      .then(res => res.json())
-      .then(data => setMessage(data.message))
-      .catch(err => console.error('Error:', err));
-  }, []);
-
   return (
-    <div className="App">
-      <h1>React Frontend</h1>
-      <p>Backend says: {message || 'Loading...'}</p>
-    </div>
+    <BrowserRouter>
+      <div className="App">
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route path="/" element={<h1>Home Page</h1>} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
-// api call test - fshije pas testimit
-export default App
+
+export default App;
