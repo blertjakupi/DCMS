@@ -39,7 +39,6 @@ const authMiddleware = async (req, res, next) => {
       include: [
         {
           model: Role,
-          through: { attributes: [] },
           attributes: ['role_id', 'role_name', 'normalized_name']
         }
       ]
@@ -50,12 +49,13 @@ const authMiddleware = async (req, res, next) => {
     }
 
     
-    req.user = {
+   req.user = {
       user_id: user.user_id,
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
-      roles: user.Roles ? user.Roles.map(role => role.normalized_name) : []
+      role: user.Role,                
+      roles: user.Role ? [user.Role.normalized_name] : [] 
     };
 
     next();

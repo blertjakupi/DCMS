@@ -4,7 +4,6 @@ const {
   sequelize,
   User,
   Role,
-  UserRole,
   Dentist
 } = require('../models');
 
@@ -159,11 +158,8 @@ const dentistController = {
         { transaction }
       );
 
-      await UserRole.create(
-        {
-          user_id: newUser.user_id,
-          role_id: dentistRole.role_id
-        },
+     await newUser.update(
+        { role_id: dentistRole.role_id },
         { transaction }
       );
 

@@ -7,7 +7,7 @@ const {
   User,
   Role,
   RefreshToken,
-  UserRole
+  Patient
 } = require('../models');
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
@@ -108,19 +108,35 @@ const authController = {
           status: 'Active',
           is_deleted: false,
           access_failed_count: 0,
-          lockout_enabled: false
+          lockout_enabled: false,
+          role_id: defaultRole.role_id
         },
         { transaction }
       );
 
       
-      await UserRole.create(
-        {
-          user_id: newUser.user_id,
-          role_id: defaultRole.role_id
-        },
+      await newUser.update(
+        { role_id: defaultRole.role_id },
         { transaction }
       );
+
+      if (defaultRole.normalized_name === 'PATIENT') {
+        await Patient.create(
+          {
+            user_id: newUser.user_id,
+            first_name,
+            last_name,
+            email,
+            phone: phone_number || null,
+            birth_date: null,
+            address: null,
+            allergies: null,
+            status: 'Active',
+            is_deleted: false
+          },
+          { transaction }
+        );
+      }
 
       await transaction.commit();
 
@@ -159,12 +175,11 @@ const authController = {
           status: 'Active'
         },
         include: [
-          {
-            model: Role,
-            through: { attributes: [] },
-            attributes: ['role_id', 'role_name', 'normalized_name']
-          }
-        ]
+            {
+              model: Role,
+              attributes: ['role_id', 'role_name', 'normalized_name']
+            }
+          ]
       });
 
       
@@ -229,11 +244,11 @@ const authController = {
         message: 'Login i suksesshëm.',
         accessToken,
         refreshToken: rawRefreshToken,
-        user: {
+       user: {
           user_id: user.user_id,
           full_name: `${user.first_name} ${user.last_name}`,
           email: user.email,
-          roles: user.roles ? user.roles.map((role) => role.normalized_name) : []
+          roles: user.Role ? [user.Role.normalized_name] : []
         }
       });
     } catch (error) {

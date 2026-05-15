@@ -11,16 +11,9 @@ const roleMiddleware = (...allowedRoles) => {
       return res.status(500).json({ message: 'No roles defined for this route.' });
     }
 
-    const userRoles = Array.isArray(req.user.roles)
-      ? req.user.roles.map(r => r.toUpperCase())
-      : [];
-
+    const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
     const normalizedAllowed = allowedRoles.map(r => r.toUpperCase());
-
-    const hasRole = normalizedAllowed.some(role =>
-      userRoles.includes(role)
-    );
-
+    const hasRole = normalizedAllowed.includes(userRole);
     if (!hasRole) {
       return res.status(403).json({
         message: `Access denied. Required roles: ${normalizedAllowed.join(', ')}`

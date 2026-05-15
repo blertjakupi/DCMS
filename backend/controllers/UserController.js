@@ -4,7 +4,6 @@ const {
   sequelize,
   User,
   Role,
-  UserRole,
   RefreshToken
 } = require('../models');
 
@@ -20,8 +19,7 @@ const userController = {
         include: [
           {
             model: Role,
-            through: { attributes: [] },
-            attributes: ['role_id', 'role_name', 'normalized_name']
+            attributes: ['role_id', 'role_name', 'normalized_name']   
           }
         ],
         order: [['created_at', 'DESC']]
@@ -52,8 +50,7 @@ const userController = {
         include: [
           {
             model: Role,
-            through: { attributes: [] },
-            attributes: ['role_id', 'role_name', 'normalized_name']
+            attributes: ['role_id', 'role_name', 'normalized_name']   
           }
         ]
       });
@@ -80,8 +77,9 @@ const userController = {
     const transaction = await sequelize.transaction();
 
     try {
-      const { first_name, last_name, email, password, phone_number, status, role_ids } = req.body;
+      const { first_name, last_name, email, password, phone_number, status, role_id } = req.body;
 
+      
       if (!first_name || !last_name || !email || !password) {
         await transaction.rollback();
         return res.status(400).json({
@@ -103,10 +101,11 @@ const userController = {
         });
       }
 
-      if (!role_ids || !Array.isArray(role_ids) || role_ids.length === 0) {
+      
+      if (!role_id) {
         await transaction.rollback();
         return res.status(400).json({
-          message: 'Të paktën një rol duhet të caktohet për përdoruesin.'
+          message: 'role_id është i detyrueshëm.'
         });
       }
 
@@ -129,15 +128,12 @@ const userController = {
         });
       }
 
-      const roles = await Role.findAll({
-        where: { role_id: { [Op.in]: role_ids } },
-        transaction
-      });
-
-      if (roles.length !== role_ids.length) {
+      
+      const role = await Role.findByPk(role_id, { transaction });
+      if (!role) {
         await transaction.rollback();
         return res.status(400).json({
-          message: 'Një ose më shumë role nuk u gjetën.'
+          message: 'Roli i specifikuar nuk ekziston.'
         });
       }
 
@@ -154,17 +150,12 @@ const userController = {
           status: status || 'Active',
           is_deleted: false,
           access_failed_count: 0,
-          lockout_enabled: false
+          lockout_enabled: false,
+          role_id: role_id          
         },
         { transaction }
       );
 
-      const userRoles = role_ids.map((role_id) => ({
-        user_id: newUser.user_id,
-        role_id
-      }));
-
-      await UserRole.bulkCreate(userRoles, { transaction });
       
       await transaction.commit();
 
@@ -174,7 +165,6 @@ const userController = {
         include: [
           {
             model: Role,
-            through: { attributes: [] },
             attributes: ['role_id', 'role_name', 'normalized_name']
           }
         ]
@@ -198,7 +188,7 @@ const userController = {
 
     try {
       const { id } = req.params;
-      const { first_name, last_name, email, phone_number, status, password } = req.body;
+      const { first_name, last_name, email, phone_number, status, password, role_id } = req.body;
 
       const user = await User.findOne({
         where: {
@@ -248,13 +238,24 @@ const userController = {
         });
       }
 
+      
+      if (role_id) {
+        const role = await Role.findByPk(role_id, { transaction });
+        if (!role) {
+          await transaction.rollback();
+          return res.status(400).json({
+            message: 'Roli i specifikuar nuk ekziston.'
+          });
+        }
+      }
+
       const updateData = {};
       if (first_name) updateData.first_name = first_name;
       if (last_name) updateData.last_name = last_name;
       if (email) updateData.email = email;
       if (phone_number !== undefined) updateData.phone_number = phone_number;
       if (status) updateData.status = status;
-
+      if (role_id) updateData.role_id = role_id;   
       if (password) {
         if (password.length < 8) {
           await transaction.rollback();
@@ -262,13 +263,11 @@ const userController = {
             message: 'Password duhet të ketë të paktën 8 karaktere.'
           });
         }
-
         const salt = await bcrypt.genSalt(10);
         updateData.password_hash = await bcrypt.hash(password, salt);
       }
 
       await user.update(updateData, { transaction });
-
       await transaction.commit();
 
       const updatedUser = await User.findOne({
@@ -277,7 +276,6 @@ const userController = {
         include: [
           {
             model: Role,
-            through: { attributes: [] },
             attributes: ['role_id', 'role_name', 'normalized_name']
           }
         ]

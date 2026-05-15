@@ -93,11 +93,9 @@ const appointmentController = {
         });
       }
 
-      const userRoles = Array.isArray(req.user.roles)
-        ? req.user.roles.map(r => r.toUpperCase())
-        : [];
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
 
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
+      if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
         const ownPatient = await Patient.findOne({
           where: {
             user_id: req.user.user_id,
@@ -159,11 +157,9 @@ const appointmentController = {
         });
       }
 
-      const userRoles = Array.isArray(req.user.roles)
-        ? req.user.roles.map(r => r.toUpperCase())
-        : [];
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
 
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
+      if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
         const ownDentist = await Dentist.findOne({
           where: {
             user_id: req.user.user_id,

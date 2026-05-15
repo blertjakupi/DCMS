@@ -3,7 +3,6 @@ const {
   sequelize,
   Role,
   User,
-  UserRole
 } = require('../models');
 
 const roleController = {
@@ -162,8 +161,8 @@ const roleController = {
         });
       }
 
-      const assignedUsers = await UserRole.count({
-        where: { role_id: id }
+      const assignedUsers = await User.count({
+        where: { role_id: id, is_deleted: false }
       });
 
       if (assignedUsers > 0) {

@@ -8,12 +8,11 @@ const {
 } = require('../models');
 
 const checkDentistAccess = async (req, targetDentistId) => {
-  const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-  if (userRoles.includes('ADMIN') || userRoles.includes('RECEPTIONIST')) {
+  const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+  if (userRole === 'ADMIN' || userRole === 'RECEPTIONIST') {
     return true;
   }
-  
-  if (userRoles.includes('DENTIST')) {
+  if (userRole === 'DENTIST') {
     const ownDentist = await Dentist.findOne({
       where: { user_id: req.user.user_id, is_deleted: false }
     });
@@ -25,12 +24,11 @@ const checkDentistAccess = async (req, targetDentistId) => {
 };
 
 const checkPatientAccess = async (req, targetPatientId) => {
-  const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-  if (userRoles.includes('ADMIN') || userRoles.includes('RECEPTIONIST') || userRoles.includes('DENTIST')) {
+  const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+  if (userRole === 'ADMIN' || userRole === 'RECEPTIONIST' || userRole === 'DENTIST') {
     return true; // Dentists are restricted at the controller-level by their own dentist_id, so we let them pass the patient check if they are the dentist
   }
-  
-  if (userRoles.includes('PATIENT')) {
+  if (userRole === 'PATIENT') {
     const ownPatient = await Patient.findOne({
       where: { user_id: req.user.user_id, is_deleted: false }
     });
@@ -93,17 +91,17 @@ const patientTreatmentController = {
         return res.status(404).json({ message: 'Trajtimi nuk u gjet.' });
       }
 
-      // Access checks
-      const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
-        if (userRoles.includes('DENTIST')) {
-          const hasAccess = await checkDentistAccess(req, pt.dentist_id);
-          if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë trajtim.' });
-        } else if (userRoles.includes('PATIENT')) {
-          const hasAccess = await checkPatientAccess(req, pt.patient_id);
-          if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë trajtim.' });
+      
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+        if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+          if (userRole === 'DENTIST') {
+            const hasAccess = await checkDentistAccess(req, pt.dentist_id);
+            if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë trajtim.' });
+          } else if (userRole === 'PATIENT') {
+            const hasAccess = await checkPatientAccess(req, pt.patient_id);
+            if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë trajtim.' });
+          }
         }
-      }
 
       return res.status(200).json({
         message: 'Trajtimi u mor me sukses.',

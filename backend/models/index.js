@@ -2,7 +2,6 @@ const sequelize = require('../config/database');
 
 const User = require('./User');
 const Role = require('./Role');
-const UserRole = require('./UserRole');
 const UserClaim = require('./UserClaim');
 const UserToken = require('./UserToken');
 const RefreshToken = require('./RefreshToken');
@@ -21,19 +20,9 @@ const InventoryItem = require('./InventoryItem');
 const InventoryTransaction = require('./InventoryTransaction');
 const DentistAvailability = require('./DentistAvailability');
 
-//Users - Roles (M:N)
-User.belongsToMany(Role, {
-  through: UserRole,
-  foreignKey: 'user_id',
-  otherKey: 'role_id'
-});
-Role.belongsToMany(User, {
-  through: UserRole,
-  foreignKey: 'role_id',
-  otherKey: 'user_id'
-});
-UserRole.belongsTo(User, { foreignKey: 'user_id' });
-UserRole.belongsTo(Role, { foreignKey: 'role_id' });
+User.belongsTo(Role, { foreignKey: 'role_id' });
+Role.hasMany(User, { foreignKey: 'role_id' });
+
 
 //UserClaim, UserToken, RefreshToken
 User.hasMany(UserClaim, {
@@ -214,7 +203,6 @@ module.exports = {
   sequelize,
   User,
   Role,
-  UserRole,
   UserClaim,
   UserToken,
   RefreshToken,

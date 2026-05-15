@@ -19,15 +19,15 @@ const getIncludeOptions = (appointmentWhere = {}) => [
 const reminderController = {
   getAll: async (req, res) => {
     try {
-      const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
       let appointmentWhere = {};
 
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
-        if (userRoles.includes('PATIENT')) {
+      if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+        if (userRole === 'PATIENT') {
           const patient = await Patient.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
           if (!patient) return res.status(403).json({ message: 'Nuk keni akses.' });
           appointmentWhere.patient_id = patient.patient_id;
-        } else if (userRoles.includes('DENTIST')) {
+        } else if (userRole === 'DENTIST') {
           const dentist = await Dentist.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
           if (!dentist) return res.status(403).json({ message: 'Nuk keni akses.' });
           appointmentWhere.dentist_id = dentist.dentist_id;
@@ -85,20 +85,20 @@ const reminderController = {
         return res.status(404).json({ message: 'Termini nuk u gjet.' });
       }
 
-      const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
-        if (userRoles.includes('PATIENT')) {
-          const patient = await Patient.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
-          if (!patient || appointment.patient_id !== patient.patient_id) {
-            return res.status(403).json({ message: 'Nuk keni akses.' });
-          }
-        } else if (userRoles.includes('DENTIST')) {
-          const dentist = await Dentist.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
-          if (!dentist || appointment.dentist_id !== dentist.dentist_id) {
-            return res.status(403).json({ message: 'Nuk keni akses.' });
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+        if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+          if (userRole === 'PATIENT') {
+            const patient = await Patient.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
+            if (!patient || appointment.patient_id !== patient.patient_id) {
+              return res.status(403).json({ message: 'Nuk keni akses.' });
+            }
+          } else if (userRole === 'DENTIST') {
+            const dentist = await Dentist.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
+            if (!dentist || appointment.dentist_id !== dentist.dentist_id) {
+              return res.status(403).json({ message: 'Nuk keni akses.' });
+            }
           }
         }
-      }
 
       const reminders = await Reminder.findAll({
         where: { appointment_id: appointmentId },

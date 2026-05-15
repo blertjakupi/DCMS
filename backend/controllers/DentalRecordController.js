@@ -6,12 +6,11 @@ const {
 } = require('../models');
 
 const checkDentistAccess = async (req, targetDentistId) => {
-  const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-  if (userRoles.includes('ADMIN') || userRoles.includes('RECEPTIONIST')) {
+  const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+  if (userRole === 'ADMIN' || userRole === 'RECEPTIONIST') {
     return true;
   }
-
-  if (userRoles.includes('DENTIST')) {
+  if (userRole === 'DENTIST') {
     const ownDentist = await Dentist.findOne({
       where: { user_id: req.user.user_id, is_deleted: false }
     });
@@ -23,21 +22,21 @@ const checkDentistAccess = async (req, targetDentistId) => {
 };
 
 const checkPatientAccess = async (req, targetPatientId) => {
-  const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-  if (userRoles.includes('ADMIN') || userRoles.includes('RECEPTIONIST') || userRoles.includes('DENTIST')) {
-    return true;
-  }
+  const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole === 'ADMIN' || userRole === 'RECEPTIONIST' || userRole === 'DENTIST') {
+        return true;
+      }
+      if (userRole === 'PATIENT') {
+        const ownPatient = await Patient.findOne({
+          where: { user_id: req.user.user_id, is_deleted: false }
+        });
+        if (ownPatient && ownPatient.patient_id === parseInt(targetPatientId)) {
+          return true;
+        }
+      }
+      return false;
+    };
 
-  if (userRoles.includes('PATIENT')) {
-    const ownPatient = await Patient.findOne({
-      where: { user_id: req.user.user_id, is_deleted: false }
-    });
-    if (ownPatient && ownPatient.patient_id === parseInt(targetPatientId)) {
-      return true;
-    }
-  }
-  return false;
-};
 
 const getIncludeOptions = () => [
   {
@@ -87,13 +86,13 @@ const dentalRecordController = {
         return res.status(404).json({ message: 'Regjistri dentar nuk u gjet.' });
       }
 
-      // Access checks
-      const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
-        if (userRoles.includes('DENTIST')) {
+      
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+        if (userRole === 'DENTIST') {
           const hasAccess = await checkDentistAccess(req, record.dentist_id);
           if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë regjistër.' });
-        } else if (userRoles.includes('PATIENT')) {
+        } else if (userRole === 'PATIENT') {
           const hasAccess = await checkPatientAccess(req, record.patient_id);
           if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë regjistër.' });
         }
@@ -174,13 +173,13 @@ const dentalRecordController = {
         return res.status(404).json({ message: 'Termini nuk u gjet.' });
       }
 
-      // Access checks
-      const userRoles = Array.isArray(req.user.roles) ? req.user.roles.map(r => r.toUpperCase()) : [];
-      if (!userRoles.includes('ADMIN') && !userRoles.includes('RECEPTIONIST')) {
-        if (userRoles.includes('DENTIST')) {
+      
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+        if (userRole === 'DENTIST') {
           const hasAccess = await checkDentistAccess(req, appointment.dentist_id);
           if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë regjistër.' });
-        } else if (userRoles.includes('PATIENT')) {
+        } else if (userRole === 'PATIENT') {
           const hasAccess = await checkPatientAccess(req, appointment.patient_id);
           if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses për të parë këtë regjistër.' });
         }

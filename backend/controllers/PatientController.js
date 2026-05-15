@@ -4,7 +4,6 @@ const {
   sequelize,
   User,
   Role,
-  UserRole,
   Patient
 } = require('../models');
 
@@ -160,11 +159,8 @@ const patientController = {
         { transaction }
       );
 
-      await UserRole.create(
-        {
-          user_id: newUser.user_id,
-          role_id: patientRole.role_id
-        },
+        await newUser.update(
+        { role_id: patientRole.role_id },
         { transaction }
       );
 
@@ -375,7 +371,28 @@ const patientController = {
         message: 'Gabim i brendshëm gjatë fshirjes së pacientit.'
       });
     }
-  }
+  },
+   getMe: async (req, res) => {
+      try {
+        const patient = await Patient.findOne({
+          where: { user_id: req.user.user_id, is_deleted: false },
+          include: [
+            {
+              model: User,
+              attributes: ['first_name', 'last_name', 'email', 'phone_number']
+            }
+          ]
+        });
+        if (!patient) {
+          return res.status(404).json({ message: 'Patient record not found' });
+        }
+        res.json(patient);
+      } catch (error) {
+        console.error('GET ME PATIENT ERROR:', error);
+        res.status(500).json({ message: 'Server error' });
+      }
+    }
 };
+   
 
 module.exports = patientController;

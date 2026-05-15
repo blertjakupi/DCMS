@@ -54,7 +54,18 @@ const User = sequelize.define('User', {
     is_deleted: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
-    }   
+    },
+    
+    role_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+        model: 'roles',
+        key: 'role_id'
+    },
+    onDelete: 'RESTRICT',
+    onUpdate: 'CASCADE'
+    },
 }, {
     tableName: 'users',
     timestamps: false
