@@ -1,27 +1,44 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import PatientPortal from './pages/PatientPortal';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
   return (
     <BrowserRouter>
-      <div className="App">
-        <Routes>
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route path="/" element={<h1>Home Page</h1>} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST', 'RECEPTIONIST']}>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN']}>
+              <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/portal/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['PATIENT']}>
+              <PatientPortal />
+            </PrivateRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }

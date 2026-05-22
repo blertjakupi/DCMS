@@ -1,43 +1,59 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import './styles/auth.css'
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
+    fullName: '',
     email: '',
+    dob: '',
+    phone: '',
     password: '',
-    phone_number: ''
+    confirmPassword: '',
+    hipaa: false,
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (!formData.hipaa) {
+      setError('You must agree to the HIPAA privacy terms.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
+      const [first_name, ...rest] = formData.fullName.trim().split(' ');
+      const last_name = rest.join(' ') || '';
+
       const response = await fetch('/api/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          first_name,
+          last_name,
+          email: formData.email,
+          password: formData.password,
+          phone_number: formData.phone,
+        }),
       });
 
       const data = await response.json();
@@ -46,7 +62,6 @@ function RegisterPage() {
         throw new Error(data.message || 'Registration failed');
       }
 
-      alert('Registration successful!');
       navigate('/login');
     } catch (err) {
       setError(err.message);
@@ -56,89 +71,133 @@ function RegisterPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <h1 className="auth-title">Dental Clinic</h1>
-        <p className="auth-subtitle">Create your account</p>
+    <div className="bg-background min-h-screen flex w-full overflow-x-hidden">
 
-        {error && <div className="auth-error">{error}</div>}
+      {/* Left Panel */}
+      <div className="hidden lg:flex flex-1 flex-col justify-center items-center bg-primary relative overflow-hidden p-12">
+        <div className="relative z-10 flex flex-col items-center text-center max-w-md">
+          <span className="material-symbols-outlined text-[64px] text-on-primary mb-5" style={{ fontVariationSettings: "'FILL' 1" }}>
+            dentistry
+          </span>
+          <h1 className="text-[32px] font-bold text-on-primary mb-3">DentaCare Pro</h1>
+          <p className="text-[16px] text-primary-fixed-dim">Your dental health, simplified.</p>
+        </div>
+      </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">First Name *</label>
-            <input
-              type="text"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              required
-              className="form-input"
-            />
+      {/* Right Panel */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 lg:p-12 relative">
+
+        {/* Mobile Logo */}
+        <div className="lg:hidden flex flex-col items-center mb-8">
+          <span className="material-symbols-outlined text-[40px] text-primary mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>
+            dentistry
+          </span>
+          <h1 className="text-[24px] font-semibold text-on-surface">DentaCare Pro</h1>
+        </div>
+
+        {/* Card */}
+        <div className="w-full max-w-[430px] bg-surface-container-lowest rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.05)] p-8 flex flex-col">
+
+          <div className="mb-5">
+            <h2 className="text-[24px] font-semibold text-on-surface">Create Account</h2>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Last Name *</label>
-            <input
-              type="text"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              required
-              className="form-input"
-            />
+          {/* Error */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm text-center">
+              {error}
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+
+            <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+              <label className="text-[14px] font-semibold text-on-surface" htmlFor="fullName">Full Name</label>
+              <input
+                className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                id="fullName" name="fullName" type="text" placeholder="Jane Doe"
+                required value={formData.fullName} onChange={handleChange}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+              <label className="text-[14px] font-semibold text-on-surface" htmlFor="email">Email Address</label>
+              <input
+                className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                id="email" name="email" type="email" placeholder="jane.doe@example.com"
+                required value={formData.email} onChange={handleChange}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+                <label className="text-[14px] font-semibold text-on-surface" htmlFor="dob">Date of Birth</label>
+                <input
+                  className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                  id="dob" name="dob" type="date"
+                  value={formData.dob} onChange={handleChange}
+                />
+              </div>
+              <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+                <label className="text-[14px] font-semibold text-on-surface" htmlFor="phone">Phone Number</label>
+                <input
+                  className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                  id="phone" name="phone" type="tel" placeholder="(555) 000-0000"
+                  value={formData.phone} onChange={handleChange}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+              <label className="text-[14px] font-semibold text-on-surface" htmlFor="password">Password</label>
+              <input
+                className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                id="password" name="password" type="password" placeholder="••••••••"
+                required value={formData.password} onChange={handleChange}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1 clinical-glow rounded transition-all duration-200">
+              <label className="text-[14px] font-semibold text-on-surface" htmlFor="confirmPassword">Confirm Password</label>
+              <input
+                className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                id="confirmPassword" name="confirmPassword" type="password" placeholder="••••••••"
+                required value={formData.confirmPassword} onChange={handleChange}
+              />
+            </div>
+
+            <div className="flex items-start gap-3 mt-1">
+              <input
+                className="w-4 h-4 rounded border-outline-variant text-primary cursor-pointer mt-[2px]"
+                id="hipaa" name="hipaa" type="checkbox"
+                checked={formData.hipaa} onChange={handleChange}
+              />
+              <label className="text-[12px] text-on-surface-variant cursor-pointer leading-tight pt-[2px]" htmlFor="hipaa">
+                I agree to the HIPAA privacy terms and conditions.
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary text-on-primary py-[12px] rounded-lg text-[14px] font-semibold mt-3 hover:bg-[#005049] transition-colors duration-200 shadow-sm flex justify-center items-center gap-2 disabled:opacity-60"
+            >
+              {loading ? 'Creating account...' : 'Create Account'}
+            </button>
+
+          </form>
+
+          <div className="mt-8 text-center">
+            <p className="text-[15px] text-on-surface-variant">
+              Already have an account?{' '}
+              <Link to="/login" className="text-[14px] font-semibold text-primary hover:text-[#005049] hover:underline transition-colors">
+                Sign In
+              </Link>
+            </p>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Email *</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="form-input"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Password *</label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              minLength="8"
-              className="form-input"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Phone Number</label>
-            <input
-              type="text"
-              name="phone_number"
-              value={formData.phone_number}
-              onChange={handleChange}
-              className="form-input"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="auth-button"
-          >
-            {loading ? 'Registering...' : 'Create Account'}
-          </button>
-        </form>
-
-        <p className="auth-footer">
-          Already have an account?{' '}
-          <Link to="/login" className="auth-link">
-            Login
-          </Link>
-        </p>
+        </div>
       </div>
     </div>
   );

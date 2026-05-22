@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.clinical-glow:focus-within {
+  box-shadow: 0 0 0 4px rgba(102, 217, 204, 0.2);
+}
