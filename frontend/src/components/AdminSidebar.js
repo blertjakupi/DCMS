@@ -6,9 +6,9 @@ const navItems = [
   { icon: 'groups', label: 'Patients', path: '/admin/patients' },
   { icon: 'folder_shared', label: 'Dental Records', path: '#' },
   { icon: 'medical_services', label: 'Treatments', path: '#' },
-  { icon: 'inventory_2', label: 'Inventory', path: '#' },
-  { icon: 'receipt_long', label: 'Billing & Invoices', path: '#' },
-  { icon: 'medical_information', label: 'Dentists', path: '#' },
+  { icon: 'inventory_2', label: 'Inventory', path: '/admin/inventory' },
+  { icon: 'receipt_long', label: 'Billing & Invoices', path: '/admin/billing' },
+  { icon: 'medical_information', label: 'Dentists', path: '/admin/dentists' },
   { icon: 'notifications_active', label: 'Reminders', path: '#' },
 ];
 

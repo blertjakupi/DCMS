@@ -8,6 +8,9 @@ import PrivateRoute from './components/PrivateRoute';
 import UserManagement from './pages/UserManagement';
 import AppointmentsManagement from './pages/AppointmentsManagement';
 import PatientsManagement from './pages/PatientsManagement';
+import InventoryManagement from './pages/InventoryManagement';
+import BillingInvoices from './pages/BillingInvoices';
+import DentistsManagement from './pages/DentistsManagement';
 
 
 function App() {
@@ -54,6 +57,30 @@ function App() {
           element={
             <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
               <PatientsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/inventory"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <InventoryManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/billing"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <BillingInvoices />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/dentists"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <DentistsManagement />
             </PrivateRoute>
           }
         />
