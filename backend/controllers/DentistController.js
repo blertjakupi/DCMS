@@ -37,6 +37,20 @@ const dentistController = {
     }
   },
 
+  countActive: async (req, res) => {
+    try {
+      const count = await Dentist.count({
+        where: {
+          status: 'Active',
+          is_deleted: false
+        }
+      });
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
   getById: async (req, res) => {
     try {
       const { id } = req.params;
@@ -153,16 +167,12 @@ const dentistController = {
           status: status || 'Active',
           is_deleted: false,
           access_failed_count: 0,
-          lockout_enabled: false
+          lockout_enabled: false,
+          role_id: dentistRole.role_id  
         },
         { transaction }
       );
-
-     await newUser.update(
-        { role_id: dentistRole.role_id },
-        { transaction }
-      );
-
+      
       const newDentist = await Dentist.create(
         {
           user_id: newUser.user_id,

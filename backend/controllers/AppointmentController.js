@@ -39,6 +39,20 @@ const appointmentController = {
       });
     }
   },
+  countByDateAndStatus: async (req, res) => {
+    try {
+      const { date, status } = req.query;
+      if (!date) {
+        return res.status(400).json({ message: 'Date query parameter required' });
+      }
+      const where = { appointment_date: date };
+      if (status) where.status = status;
+      const count = await Appointment.count({ where });
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
 
   getById: async (req, res) => {
     try {
@@ -205,94 +219,102 @@ const appointmentController = {
   },
 
   create: async (req, res) => {
-    try {
-      const {
-        patient_id,
-        dentist_id,
-        appointment_date,
-        appointment_time,
-        treatment_id,
-        notes,
-        status
-      } = req.body;
-
-      if (!patient_id || !dentist_id || !appointment_date || !appointment_time || !duration) {
-        return res.status(400).json({
-          message: 'patient_id, dentist_id, appointment_date, appointment_time dhe duration janë të detyrueshme.'
-        });
-      }
-
-      if (duration <= 0) {
-        return res.status(400).json({
-          message: 'duration duhet të jetë më e madhe se 0.'
-        });
-      }
-
-      if (status && !allowedStatuses.includes(status)) {
-        return res.status(400).json({
-          message: `Statusi nuk është valid. Vlerat e lejuara: ${allowedStatuses.join(', ')}`
-        });
-      }
-
-      const patient = await Patient.findOne({
-        where: {
+      try {
+        const {
           patient_id,
-          is_deleted: false,
-          status: 'Active'
-        }
-      });
-
-      if (!patient) {
-        return res.status(404).json({
-          message: 'Pacienti nuk u gjet ose nuk është aktiv.'
-        });
-      }
-
-      const dentist = await Dentist.findOne({
-        where: {
-          dentist_id,
-          is_deleted: false,
-          status: 'Active'
-        }
-      });
-
-      if (!dentist) {
-        return res.status(404).json({
-          message: 'Dentisti nuk u gjet ose nuk është aktiv.'
-        });
-      }
-
-      const conflictingAppointment = await Appointment.findOne({
-        where: {
           dentist_id,
           appointment_date,
           appointment_time,
-          status: { [Op.ne]: 'Cancelled' }
-        }
-      });
+          treatment_id,
+          notes,
+          status
+        } = req.body;
 
-      if (conflictingAppointment) {
-        return res.status(409).json({
-          message: 'Dentisti ka tashmë një termin të caktuar në këtë datë dhe orë.'
-        });
-      }
-
-      try {
-        const newAppointment = await appointmentService.createAppointment(req.body);
-
-        return res.status(201).json({
-          message: 'Termini u krijua me sukses.',
-          data: newAppointment
-        });
-
-      }catch (error) {
-          console.error('CREATE APPOINTMENT ERROR:', error);
-
+        
+        if (!patient_id || !dentist_id || !appointment_date || !appointment_time || !treatment_id) {
           return res.status(400).json({
-            message: error.message
+            message: 'patient_id, dentist_id, appointment_date, appointment_time dhe treatment_id janë të detyrueshme.'
           });
-      }
+        }
 
+        if (status && !allowedStatuses.includes(status)) {
+          return res.status(400).json({
+            message: `Statusi nuk është valid. Vlerat e lejuara: ${allowedStatuses.join(', ')}`
+          });
+        }
+
+        
+        const patient = await Patient.findOne({
+          where: {
+            patient_id,
+            is_deleted: false,
+            status: 'Active'
+          }
+        });
+        if (!patient) {
+          return res.status(404).json({
+            message: 'Pacienti nuk u gjet ose nuk është aktiv.'
+          });
+        }
+
+        
+        const dentist = await Dentist.findOne({
+          where: {
+            dentist_id,
+            is_deleted: false,
+            status: 'Active'
+          }
+        });
+        if (!dentist) {
+          return res.status(404).json({
+            message: 'Dentisti nuk u gjet ose nuk është aktiv.'
+          });
+        }
+
+        
+        const Treatment = require('../models').Treatment;
+        const treatment = await Treatment.findOne({
+          where: {
+            treatment_id,
+            status: 'Active',
+            is_deleted: false
+          }
+        });
+        if (!treatment) {
+          return res.status(404).json({
+            message: 'Trajtimi nuk u gjet ose nuk është aktiv.'
+          });
+        }
+        const duration = treatment.average_duration || 30; 
+
+        
+        const conflictingAppointment = await Appointment.findOne({
+          where: {
+            dentist_id,
+            appointment_date,
+            appointment_time,
+            status: { [Op.ne]: 'Cancelled' }
+          }
+        });
+        if (conflictingAppointment) {
+          return res.status(409).json({
+            message: 'Dentisti ka tashmë një termin të caktuar në këtë datë dhe orë.'
+          });
+        }
+
+       
+        const newAppointment = await Appointment.create({
+          patient_id,
+          dentist_id,
+          treatment_id,
+          appointment_date,
+          appointment_time,
+          duration,
+          notes: notes || null,
+          status: status || 'Scheduled'
+        });
+
+        
         const createdAppointment = await Appointment.findOne({
           where: { appointment_id: newAppointment.appointment_id },
           include: [

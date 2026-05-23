@@ -1,4 +1,5 @@
 const { sequelize, Payment, Invoice } = require('../models');
+const { Op } = require('sequelize');
 
 
 const updateInvoiceStatus = async (invoice_id, transaction) => {
@@ -74,6 +75,25 @@ exports.getAllPayments = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error fetching payments' });
+  }
+};
+exports.sumByDateRange = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) {
+      return res.status(400).json({ message: 'from and to dates required (YYYY-MM-DD)' });
+    }
+    const total = await Payment.sum('amount', {
+      where: {
+        payment_date: {
+          [Op.between]: [from, to]
+        }
+      }
+    });
+    res.json({ total: total || 0 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 

@@ -36,6 +36,19 @@ const patientController = {
       });
     }
   },
+  countActive: async (req, res) => {
+    try {
+      const count = await Patient.count({
+        where: {
+          status: 'Active',
+          is_deleted: false
+        }
+      });
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
 
   getById: async (req, res) => {
     try {
@@ -144,7 +157,7 @@ const patientController = {
       const salt = await bcrypt.genSalt(10);
       const password_hash = await bcrypt.hash(password, salt);
 
-      const newUser = await User.create(
+     const newUser = await User.create(
         {
           first_name,
           last_name,
@@ -154,16 +167,11 @@ const patientController = {
           status: status || 'Active',
           is_deleted: false,
           access_failed_count: 0,
-          lockout_enabled: false
+          lockout_enabled: false,
+          role_id: patientRole.role_id   
         },
         { transaction }
       );
-
-        await newUser.update(
-        { role_id: patientRole.role_id },
-        { transaction }
-      );
-
       const newPatient = await Patient.create(
         {
           user_id: newUser.user_id,

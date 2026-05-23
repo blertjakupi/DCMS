@@ -6,6 +6,11 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 
 router.use(authMiddleware);
 
+router.get('/sum', 
+  roleMiddleware('ADMIN', 'RECEPTIONIST'), 
+  paymentController.sumByDateRange
+);
+
 router.get('/', 
   roleMiddleware('ADMIN', 'RECEPTIONIST', 'DOCTOR'), 
   paymentController.getAllPayments

@@ -6,6 +6,7 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 
 router.use(authMiddleware);
 
+router.get('/count', roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIENT', 'DENTIST'), appointmentController.countByDateAndStatus);
 router.get('/patient/:patientId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIENT'), appointmentController.getAppointmentsByPatient);
 router.get('/dentist/:dentistId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), appointmentController.getAppointmentsByDentist);
 router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), appointmentController.getAll);

@@ -224,7 +224,7 @@ function InventoryManagement() {
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-md mb-lg mt-sm">
+       <div className="flex flex-col md:flex-row md:items-end justify-between gap-md mb-lg mt-12">
           <div>
             <nav className="flex gap-2 text-caption text-on-surface-variant mb-1">
               <span>Admin</span>

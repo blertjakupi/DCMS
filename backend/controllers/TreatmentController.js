@@ -5,7 +5,10 @@ const treatmentController = {
   getAll: async (req, res) => {
     try {
       const treatments = await Treatment.findAll({
-        where: { is_active: true },
+        where: { 
+            status: 'Active',
+            is_deleted: false
+          },
         order: [['treatment_id', 'DESC']]
       });
 
@@ -28,7 +31,8 @@ const treatmentController = {
       const treatment = await Treatment.findOne({
         where: {
           treatment_id: id,
-          is_active: true
+          status: 'Active',
+          is_deleted: false
         }
       });
 
@@ -74,9 +78,11 @@ const treatmentController = {
 
       const existingTreatment = await Treatment.findOne({
         where: {
-          treatment_name,
-          is_active: true
-        }
+            treatment_name,
+            treatment_id: { [Op.ne]: id },
+            status: 'Active',
+            is_deleted: false
+          }
       });
 
       if (existingTreatment) {
@@ -86,12 +92,13 @@ const treatmentController = {
       }
 
       const newTreatment = await Treatment.create({
-        treatment_name,
-        description: description || null,
-        cost,
-        average_duration: average_duration || null,
-        is_active: true
-      });
+          treatment_name,
+          description: description || null,
+          price,    
+          average_duration: average_duration || null,
+          status: 'Active',
+          is_deleted: false
+        });
 
       return res.status(201).json({
         message: 'Trajtimi u krijua me sukses.',
@@ -112,9 +119,10 @@ const treatmentController = {
 
       const treatment = await Treatment.findOne({
         where: {
-          treatment_id: id,
-          is_active: true
-        }
+            treatment_id: id,
+            status: 'Active',
+            is_deleted: false
+          }
       });
 
       if (!treatment) {
@@ -140,7 +148,8 @@ const treatmentController = {
           where: {
             treatment_name,
             treatment_id: { [Op.ne]: id },
-            is_active: true
+            status: 'Active',
+            is_deleted: false
           }
         });
 
@@ -189,7 +198,8 @@ const treatmentController = {
       }
 
       await treatment.update({
-        is_active: false
+        status: 'Inactive',
+        is_deleted: true
       });
 
       return res.status(200).json({
