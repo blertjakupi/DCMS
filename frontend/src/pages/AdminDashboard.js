@@ -1,22 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import AdminSidebar from '../components/AdminSidebar';
 
-const navItems = [
-  { icon: 'dashboard', label: 'Dashboard', active: true },
-  { icon: 'calendar_month', label: 'Appointments' },
-  { icon: 'groups', label: 'Patients' },
-  { icon: 'folder_shared', label: 'Dental Records' },
-  { icon: 'medical_services', label: 'Treatments' },
-  { icon: 'inventory_2', label: 'Inventory' },
-  { icon: 'receipt_long', label: 'Billing & Invoices' },
-  { icon: 'medical_information', label: 'Dentists' },
-  { icon: 'notifications_active', label: 'Reminders' },
-];
 
-const adminItems = [
-  { icon: 'manage_accounts', label: 'User Management' },
-  { icon: 'settings_system_daydream', label: 'System Settings' },
-];
 
 const kpis = [
   {
@@ -135,81 +120,17 @@ const alerts = [
 ];
 
 function AdminDashboard() {
-  const navigate = useNavigate();
+  
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const initials = user?.full_name
   ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   : 'AD';
 
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-
   return (
     <div className="font-body-base text-body-base text-on-background h-screen overflow-hidden flex">
 
-      {/* Sidebar */}
-      <nav className="bg-surface-container-low text-primary w-64 fixed left-0 top-0 shadow-sm flex flex-col h-full p-4 space-y-2 z-20 hidden md:flex">
-        {/* Brand */}
-        <div className="px-4 py-6 mb-4 flex items-center gap-3">
-          <span className="material-symbols-outlined text-[32px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
-            dentistry
-          </span>
-          <h1 className="text-[24px] font-bold text-primary tracking-tight">DentaCare Pro</h1>
-        </div>
-
-        {/* Nav Items */}
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {navItems.map((item) => (
-            <a
-              key={item.label}
-              href="#"
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 active:scale-[0.98] ${
-                item.active
-                  ? 'bg-primary-container text-on-primary-container font-bold'
-                  : 'text-on-surface-variant hover:bg-surface-container-highest'
-              }`}
-            >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
-          ))}
-
-          {/* Administration Section */}
-          <div className="pt-4 pb-2">
-            <p className="px-4 text-[12px] text-outline mb-2 uppercase tracking-wider">Administration</p>
-            {adminItems.map((item) => (
-              <a
-                key={item.label}
-                href="#"
-                className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200 active:scale-[0.98]"
-              >
-                <span className="material-symbols-outlined">{item.icon}</span>
-                <span>{item.label}</span>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-auto pt-4 border-t border-surface-variant space-y-1">
-          <a href="#" className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200">
-            <span className="material-symbols-outlined">help</span>
-            <span>Support</span>
-          </a>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-error hover:bg-error-container rounded-lg transition-colors duration-200"
-          >
-            <span className="material-symbols-outlined">logout</span>
-            <span>Logout</span>
-          </button>
-        </div>
-      </nav>
-
+	<AdminSidebar />  {}
+      
       {/* Main Content */}
       <div className="flex-1 flex flex-col md:ml-64 min-h-screen">
 

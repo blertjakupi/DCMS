@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import PatientPortal from './pages/PatientPortal';
 import PrivateRoute from './components/PrivateRoute';
+import UserManagement from './pages/UserManagement';
+
 
 function App() {
   return (
@@ -29,6 +31,14 @@ function App() {
             </PrivateRoute>
           }
         />
+		<Route
+			path="/admin/users"
+			element={
+				<PrivateRoute allowedRoles={['ADMIN']}>
+				<UserManagement />
+			</PrivateRoute>
+		}
+		/>
         <Route
           path="/portal/dashboard"
           element={
