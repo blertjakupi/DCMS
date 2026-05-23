@@ -1,38 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
-
-const mockUsers = [
-  {
-    id: 1,
-    initials: 'JD',
-    name: 'John Doe',
-    email: 'john.doe@dentacare.pro',
-    role: 'Admin',
-    status: 'Active',
-    dateJoined: 'Oct 14, 2023',
-    avatarBg: 'bg-primary-container text-on-primary-container',
-  },
-  {
-    id: 2,
-    initials: 'SJ',
-    name: 'Sarah Jenkins',
-    email: 's.jenkins@dentacare.pro',
-    role: 'Dentist',
-    status: 'Active',
-    dateJoined: 'Nov 02, 2023',
-    avatarBg: 'bg-secondary-container text-on-secondary-container',
-  },
-  {
-    id: 3,
-    initials: 'MR',
-    name: 'Michael Ross',
-    email: 'm.ross@mail.com',
-    role: 'Patient',
-    status: 'Inactive',
-    dateJoined: 'Dec 10, 2022',
-    avatarBg: 'bg-surface-variant text-on-surface-variant',
-  },
-];
 
 const roleBadge = {
   Admin: 'bg-primary-container/20 text-on-primary-container border-primary-container/30',
@@ -41,19 +8,98 @@ const roleBadge = {
   Patient: 'bg-surface-variant/50 text-on-surface-variant border-outline-variant/30',
 };
 
+const avatarBgByRole = {
+  Admin: 'bg-primary-container text-on-primary-container',
+  Dentist: 'bg-secondary-container text-on-secondary-container',
+  Receptionist: 'bg-tertiary-container text-on-tertiary-container',
+  Patient: 'bg-surface-variant text-on-surface-variant',
+};
+
+
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+function mapApiUser(u) {
+  const roleName = u.Role?.role_name || 'Patient';
+  // Capitalize first letter, lowercase rest to match badge keys
+  const displayRole = roleName.charAt(0).toUpperCase() + roleName.slice(1).toLowerCase();
+  const firstName = u.first_name || '';
+  const lastName = u.last_name || '';
+  const fullName = `${firstName} ${lastName}`.trim();
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+
+  return {
+    id: u.user_id,
+    initials,
+    name: fullName,
+    email: u.email,
+    role: displayRole,
+    roleId: u.role_id,
+    status: u.status || 'Active',
+    dateJoined: formatDate(u.created_at),
+    avatarBg: avatarBgByRole[displayRole] || avatarBgByRole.Patient,
+  };
+}
+
 function UserManagement() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const initials = user?.full_name
     ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : 'AD';
 
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [newRole, setNewRole] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  
+  const [roles, setRoles] = useState([]);
+
+// add this inside fetchUsers or as a separate useEffect
+useEffect(() => {
+  const token = localStorage.getItem('accessToken');
+  fetch('/api/roles', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+    .then(res => res.json())
+    .then(data => setRoles(data.data || []));
+}, []);
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch('/api/users', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Failed to fetch users (${res.status})`);
+      }
+      const json = await res.json();
+      const mapped = (json.data || []).map(mapApiUser);
+      setUsers(mapped);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const filtered = users.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -69,9 +115,55 @@ function UserManagement() {
     setModalOpen(true);
   };
 
-  const saveRole = () => {
-    setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, role: newRole } : u));
+const saveRole = async () => {
+  if (!selectedUser) return;
+  setSaving(true);
+  try {
+    const token = localStorage.getItem('accessToken');
+    const role = roles.find(r => r.role_name === newRole);
+    if (!role) throw new Error('Role not found');
+
+    const res = await fetch(`/api/users/${selectedUser.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ role_id: role.role_id })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to update role');
+    }
+    await fetchUsers();
     setModalOpen(false);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setSaving(false);
+  }
+};
+
+  const handleDelete = async (u) => {
+    if (!window.confirm(`Are you sure you want to delete ${u.name}? This action cannot be undone.`)) return;
+    setDeleting(u.id);
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/users/${u.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to delete user');
+      }
+      // Refresh the list from the server
+      await fetchUsers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(null);
+    }
   };
 
   return (
@@ -118,6 +210,16 @@ function UserManagement() {
               <p className="text-[16px] text-on-surface-variant mt-1">Manage staff accounts and role assignments.</p>
             </div>
 
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center justify-between">
+                <span>{error}</span>
+                <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 ml-4">
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            )}
+
             {/* Table Card */}
             <div className="bg-surface-container-lowest rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-outline-variant/20 overflow-hidden flex flex-col">
 
@@ -157,81 +259,105 @@ function UserManagement() {
                 </div>
               </div>
 
-              {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead>
-                    <tr className="bg-surface-container-low border-b border-outline-variant/30 text-on-surface-variant text-[12px] font-semibold uppercase tracking-wider">
-                      <th className="py-3 px-6">User</th>
-                      <th className="py-3 px-6">Role</th>
-                      <th className="py-3 px-6">Status</th>
-                      <th className="py-3 px-6">Date Joined</th>
-                      <th className="py-3 px-6 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant/20">
-                    {filtered.map(u => (
-                      <tr key={u.id} className="hover:bg-surface-variant/20 transition-colors">
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-full ${u.avatarBg} flex items-center justify-center text-[13px] font-semibold shrink-0`}>
-                              {u.initials}
-                            </div>
-                            <div>
-                              <div className="text-[15px] font-semibold text-on-surface">{u.name}</div>
-                              <div className="text-[12px] text-on-surface-variant">{u.email}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${roleBadge[u.role] || roleBadge.Patient}`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          {u.status === 'Active' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Active
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-surface-variant/30 text-on-surface-variant border border-outline-variant/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-outline"></span> Inactive
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-6 text-[15px] text-on-surface-variant">{u.dateJoined}</td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <button
-                              onClick={() => openModal(u)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors text-xs font-semibold"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">edit_square</span> Edit Role
-                            </button>
-                            <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-error/30 text-error hover:bg-error/5 transition-colors text-xs font-semibold">
-                              <span className="material-symbols-outlined text-[18px]">delete</span> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {/* Loading State */}
+              {loading && (
+                <div className="flex items-center justify-center py-16">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm text-on-surface-variant">Loading users...</span>
+                  </div>
+                </div>
+              )}
 
-              {/* Pagination */}
-              <div className="p-4 px-6 border-t border-outline-variant/20 flex items-center justify-between bg-surface-container-lowest">
-                <span className="text-[12px] text-on-surface-variant">Showing {filtered.length} of {users.length} entries</span>
-                <div className="flex gap-1">
-                  <button className="p-1 rounded border border-outline-variant/50 text-on-surface-variant hover:bg-surface-variant">
-                    <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                  </button>
-                  <button className="p-1 px-3 rounded bg-primary-container text-on-primary-container text-[13px] font-semibold">1</button>
-                  <button className="p-1 rounded border border-outline-variant/50 text-on-surface-variant hover:bg-surface-variant">
-                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              {/* Table */}
+              {!loading && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[800px]">
+                    <thead>
+                      <tr className="bg-surface-container-low border-b border-outline-variant/30 text-on-surface-variant text-[12px] font-semibold uppercase tracking-wider">
+                        <th className="py-3 px-6">User</th>
+                        <th className="py-3 px-6">Role</th>
+                        <th className="py-3 px-6">Status</th>
+                        <th className="py-3 px-6">Date Joined</th>
+                        <th className="py-3 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/20">
+                      {filtered.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-on-surface-variant text-sm">
+                            No users found.
+                          </td>
+                        </tr>
+                      ) : (
+                        filtered.map(u => (
+                          <tr key={u.id} className="hover:bg-surface-variant/20 transition-colors">
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full ${u.avatarBg} flex items-center justify-center text-[13px] font-semibold shrink-0`}>
+                                  {u.initials}
+                                </div>
+                                <div>
+                                  <div className="text-[15px] font-semibold text-on-surface">{u.name}</div>
+                                  <div className="text-[12px] text-on-surface-variant">{u.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${roleBadge[u.role] || roleBadge.Patient}`}>
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6">
+                              {u.status === 'Active' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-surface-variant/30 text-on-surface-variant border border-outline-variant/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-outline"></span> Inactive
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-6 text-[15px] text-on-surface-variant">{u.dateJoined}</td>
+                            <td className="py-4 px-6 text-right">
+                              <div className="flex items-center justify-end gap-3">
+                                <button
+                                  onClick={() => openModal(u)}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 transition-colors text-xs font-semibold"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">edit_square</span> Edit Role
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(u)}
+                                  disabled={deleting === u.id}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-error/30 text-error hover:bg-error/5 transition-colors text-xs font-semibold disabled:opacity-50"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                  {deleting === u.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Footer */}
+              {!loading && (
+                <div className="p-4 px-6 border-t border-outline-variant/20 flex items-center justify-between bg-surface-container-lowest">
+                  <span className="text-[12px] text-on-surface-variant">Showing {filtered.length} of {users.length} entries</span>
+                  <button
+                    onClick={fetchUsers}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary-dark font-semibold transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">refresh</span> Refresh
                   </button>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </main>
@@ -261,25 +387,26 @@ function UserManagement() {
                   value={newRole}
                   onChange={e => setNewRole(e.target.value)}
                 >
-                  <option value="Patient">Patient</option>
-                  <option value="Dentist">Dentist</option>
-                  <option value="Receptionist">Receptionist</option>
-                  <option value="Admin">Admin</option>
+                  {roles.map(r => (
+				<option key={r.role_id} value={r.role_name}>{r.role_name}</option>
+				))}
                 </select>
               </div>
             </div>
             <div className="p-6 bg-surface border-t border-outline-variant/20 flex justify-end gap-3">
               <button
                 onClick={() => setModalOpen(false)}
-                className="px-6 py-2 rounded-lg border border-outline text-on-surface text-[14px] font-semibold hover:bg-surface-variant/50 transition-colors"
+                disabled={saving}
+                className="px-6 py-2 rounded-lg border border-outline text-on-surface text-[14px] font-semibold hover:bg-surface-variant/50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={saveRole}
-                className="px-6 py-2 rounded-lg bg-primary text-on-primary text-[14px] font-semibold hover:bg-[#005049] transition-colors"
+                disabled={saving}
+                className="px-6 py-2 rounded-lg bg-primary text-on-primary text-[14px] font-semibold hover:bg-[#005049] transition-colors disabled:opacity-50"
               >
-                Save Changes
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

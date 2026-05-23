@@ -6,6 +6,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import PatientPortal from './pages/PatientPortal';
 import PrivateRoute from './components/PrivateRoute';
 import UserManagement from './pages/UserManagement';
+import AppointmentsManagement from './pages/AppointmentsManagement';
+import PatientsManagement from './pages/PatientsManagement';
 
 
 function App() {
@@ -39,6 +41,22 @@ function App() {
 			</PrivateRoute>
 		}
 		/>
+        <Route
+          path="/admin/appointments"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <AppointmentsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/patients"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <PatientsManagement />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/portal/dashboard"
           element={

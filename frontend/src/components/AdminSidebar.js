@@ -2,8 +2,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const navItems = [
   { icon: 'dashboard', label: 'Dashboard', path: '/admin/dashboard' },
-  { icon: 'calendar_month', label: 'Appointments', path: '#' },
-  { icon: 'groups', label: 'Patients', path: '#' },
+  { icon: 'calendar_month', label: 'Appointments', path: '/admin/appointments' },
+  { icon: 'groups', label: 'Patients', path: '/admin/patients' },
   { icon: 'folder_shared', label: 'Dental Records', path: '#' },
   { icon: 'medical_services', label: 'Treatments', path: '#' },
   { icon: 'inventory_2', label: 'Inventory', path: '#' },
