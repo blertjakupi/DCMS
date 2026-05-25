@@ -46,7 +46,7 @@ const getIncludeOptions = () => [
   },
   {
     model: Appointment,
-    attributes: ['appointment_id', 'appointment_date']
+    attributes: ['appointment_id', 'appointment_date', 'status']
   },
   {
     model: Patient,

@@ -11,6 +11,8 @@ import PatientsManagement from './pages/PatientsManagement';
 import InventoryManagement from './pages/InventoryManagement';
 import BillingInvoices from './pages/BillingInvoices';
 import DentistsManagement from './pages/DentistsManagement';
+import DentalRecordsManagement from './pages/DentalRecordsManagement';
+import TreatmentsManagement from './pages/TreatmentsManagement';
 
 
 function App() {
@@ -81,6 +83,22 @@ function App() {
           element={
             <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
               <DentistsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/dental-records"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST', 'DENTIST']}>
+              <DentalRecordsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/treatments"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST', 'DENTIST']}>
+              <TreatmentsManagement />
             </PrivateRoute>
           }
         />
