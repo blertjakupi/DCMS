@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
+import DentistSidebar from '../components/DentistSidebar';
+
 
 const emptyForm = {
   patient_id: '',
@@ -57,6 +60,8 @@ const formatTime = (value) => {
 };
 
 function AppointmentsManagement() {
+  const location = useLocation();
+  const SidebarComponent = location.pathname.startsWith('/dentist') ? DentistSidebar : AdminSidebar;
   const [appointments, setAppointments] = useState([]);
   const [patients, setPatients] = useState([]);
   const [dentists, setDentists] = useState([]);
@@ -202,9 +207,9 @@ function AppointmentsManagement() {
 
   return (
     <div className="bg-background font-body-base text-body-base text-on-background min-h-screen overflow-x-hidden">
-      <AdminSidebar />
+      <SidebarComponent />
 
-      <header className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-surface/90 backdrop-blur-md z-10 flex items-center justify-between px-6 shadow-sm border-b border-outline-variant/20">
+  <header className="fixed top-0 right-0 left-0 md:left-64 h-16 bg-surface/90 backdrop-blur-md z-10 flex items-center justify-between px-6 shadow-sm border-b border-outline-variant/20">
         <div className="flex-1 max-w-xl clinical-glow">
           <div className="relative flex items-center">
             <span className="material-symbols-outlined absolute left-3 text-on-surface-variant">search</span>

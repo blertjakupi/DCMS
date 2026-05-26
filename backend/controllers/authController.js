@@ -7,7 +7,8 @@ const {
   User,
   Role,
   RefreshToken,
-  Patient
+  Patient,
+  Dentist
 } = require('../models');
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
@@ -31,7 +32,7 @@ const createAccessToken = (user) => {
       email: user.email
     },
     ACCESS_TOKEN_SECRET,
-    { expiresIn: '15m' }
+    { expiresIn: '8h' }
   );
 };
 
@@ -216,6 +217,10 @@ const authController = {
         access_failed_count: 0,
         lockout_enabled: false
       });
+	  
+	  const dentistRecord = await Dentist.findOne({
+	  where: { user_id: user.user_id, is_deleted: false }
+	  });
 
       
       await RefreshToken.update(
@@ -248,7 +253,8 @@ const authController = {
           user_id: user.user_id,
           full_name: `${user.first_name} ${user.last_name}`,
           email: user.email,
-          roles: user.Role ? [user.Role.normalized_name] : []
+          roles: user.Role ? [user.Role.normalized_name] : [],
+		  dentist_id: dentistRecord ? dentistRecord.dentist_id : null
         }
       });
     } catch (error) {

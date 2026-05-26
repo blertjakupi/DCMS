@@ -13,6 +13,9 @@ import BillingInvoices from './pages/BillingInvoices';
 import DentistsManagement from './pages/DentistsManagement';
 import DentalRecordsManagement from './pages/DentalRecordsManagement';
 import TreatmentsManagement from './pages/TreatmentsManagement';
+import RemindersPage from './pages/RemindersPage';
+import SystemSettings from './pages/SystemSettings';
+import DentistAppointments from './pages/DentistAppointments';
 
 
 function App() {
@@ -31,6 +34,54 @@ function App() {
           }
         />
         <Route
+          path="/dentist/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+		  path="/dentist/appointments"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <DentistAppointments />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dentist/patients"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <PatientsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dentist/dental-records"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <DentalRecordsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dentist/treatments"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <TreatmentsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/dentist/reminders"
+          element={
+            <PrivateRoute allowedRoles={['DENTIST']}>
+              <RemindersPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
           path="/admin/dashboard"
           element={
             <PrivateRoute allowedRoles={['ADMIN']}>
@@ -38,14 +89,14 @@ function App() {
             </PrivateRoute>
           }
         />
-		<Route
-			path="/admin/users"
-			element={
-				<PrivateRoute allowedRoles={['ADMIN']}>
-				<UserManagement />
-			</PrivateRoute>
-		}
-		/>
+        <Route
+          path="/admin/users"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN']}>
+              <UserManagement />
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/admin/appointments"
           element={
@@ -91,6 +142,22 @@ function App() {
           element={
             <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST', 'DENTIST']}>
               <DentalRecordsManagement />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/reminders"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN', 'RECEPTIONIST']}>
+              <RemindersPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <PrivateRoute allowedRoles={['ADMIN']}>
+              <SystemSettings />
             </PrivateRoute>
           }
         />

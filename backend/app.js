@@ -1,6 +1,6 @@
 require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
-const { sequelize } = require('./models');
+const { sequelize, Setting } = require('./models');
 
 const authController = require('./controllers/authController');
 const authRoutes = require('./routes/authRoutes');
@@ -19,6 +19,7 @@ const dentalRecordRoutes = require('./routes/dentalRecordRoutes');
 const reminderRoutes = require('./routes/reminderRoutes');
 const inventoryItemRoutes = require('./routes/inventoryItemRoutes');
 const inventoryTransactionRoutes = require('./routes/inventoryTransactionRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 const app = express();
 app.use(express.json());
@@ -40,6 +41,7 @@ app.use('/api/dental-records', dentalRecordRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/inventory-items', inventoryItemRoutes);
 app.use('/api/inventory-transactions', inventoryTransactionRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });
@@ -57,6 +59,10 @@ sequelize.authenticate()
   })
   .then(() => {
     console.log('Models synchronized successfully.');
+    return Setting.seedDefaults();
+  })
+  .then(() => {
+    console.log('Default settings seeded successfully.');
     app.listen(process.env.PORT || 3000, () => {
       console.log(`Server is running on port ${process.env.PORT || 3000}`);
     });

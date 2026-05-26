@@ -9,7 +9,7 @@ const navItems = [
   { icon: 'inventory_2', label: 'Inventory', path: '/admin/inventory' },
   { icon: 'receipt_long', label: 'Billing & Invoices', path: '/admin/billing' },
   { icon: 'medical_information', label: 'Dentists', path: '/admin/dentists' },
-  { icon: 'notifications_active', label: 'Reminders', path: '#' },
+  { icon: 'notifications_active', label: 'Reminders', path: '/admin/reminders' },
 ];
 
 const adminItems = [
@@ -31,11 +31,11 @@ function AdminSidebar() {
 
   return (
     <nav className="bg-surface-container-low text-primary w-64 fixed left-0 top-0 shadow-sm flex flex-col h-full p-4 space-y-2 z-20 hidden md:flex">
-      <div className="px-4 py-6 mb-4 flex items-center gap-3">
+      <div className="px-2 py-6 mb-4 flex items-center gap-3">
         <span className="material-symbols-outlined text-[32px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
           dentistry
         </span>
-        <h1 className="text-[24px] font-bold text-primary tracking-tight">DentaCare Pro</h1>
+        <h1 className="text-[24px] font-bold text-primary tracking-tight whitespace-nowrap ">DentaCare Pro</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1">
@@ -60,7 +60,7 @@ function AdminSidebar() {
         <div className="pt-4 pb-2">
           <p className="px-4 text-[12px] text-outline mb-2 uppercase tracking-wider">Administration</p>
           {adminItems.map((item) => {
-  const path = item.label === 'User Management' ? '/admin/users' : '#';
+  const path = item.label === 'User Management' ? '/admin/users' : '/admin/settings';
   const isActive = location.pathname === path;
   return (
     <a

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DentistSidebar from '../components/DentistSidebar';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -13,30 +14,11 @@ function Dashboard() {
     catch { localStorage.clear(); navigate('/login'); }
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-
   if (!user) return null;
 
   const displayName = user.full_name || 'Doctor';
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-  const navItems = [
-    { label: 'Dashboard', icon: 'dashboard', active: true },
-    { label: 'Appointments', icon: 'calendar_today' },
-    { label: 'Patients', icon: 'group' },
-    { label: 'Dental Records', icon: 'folder_shared' },
-    { label: 'Treatments', icon: 'medical_services' },
-    { label: 'Inventory', icon: 'inventory_2' },
-    { label: 'Billing & Invoices', icon: 'receipt_long' },
-    { label: 'Dentists', icon: 'person_search' },
-    { label: 'Reminders', icon: 'notifications_active' },
-  ];
 
   const schedule = [
     { time: '09:00 AM', patient: 'John Doe', treatment: 'Routine Checkup', status: 'Completed' },
@@ -67,46 +49,7 @@ function Dashboard() {
   return (
     <div className="bg-background text-on-background font-body-base antialiased flex h-screen overflow-hidden">
 
-      {/* Sidebar */}
-      <nav className="bg-surface-container-low h-screen w-64 fixed left-0 top-0 hidden md:flex flex-col h-full py-md px-sm overflow-y-auto border-r border-outline-variant/30 z-50">
-        <div className="mb-lg px-sm">
-          <div className="flex items-center gap-sm">
-            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary">
-              <span className="material-symbols-outlined">dentistry</span>
-            </div>
-            <div>
-              <h1 className="text-headline-md font-headline-md font-bold text-primary">DentaCare Pro</h1>
-              <p className="text-caption font-caption text-on-surface-variant">Clinic Management</p>
-            </div>
-          </div>
-        </div>
-
-        <ul className="flex-1 space-y-unit">
-          {navItems.map((item) => (
-            <li key={item.label}>
-              <a href="#" className={`flex items-center gap-sm px-sm py-sm rounded-lg transition-colors duration-200 ${
-                item.active
-                  ? 'bg-primary text-on-primary font-label-bold'
-                  : 'text-on-surface-variant font-body-base hover:bg-surface-container-high'
-              }`}>
-                <span className="material-symbols-outlined">{item.icon}</span>
-                {item.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-auto pt-md space-y-2">
-          <button className="w-full bg-primary text-on-primary font-label-bold py-sm px-md rounded-full hover:bg-primary-fixed-dim transition-colors duration-200 shadow-sm flex items-center justify-center gap-xs">
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            New Appointment
-          </button>
-          <button onClick={handleLogout} className="w-full flex items-center gap-sm px-sm py-sm text-error hover:bg-error-container rounded-lg transition-colors duration-200">
-            <span className="material-symbols-outlined">logout</span>
-            <span>Logout</span>
-          </button>
-        </div>
-      </nav>
+      <DentistSidebar />
 
       {/* Main Content Wrapper */}
       <div className="ml-0 md:ml-64 flex-1 flex flex-col min-w-0">

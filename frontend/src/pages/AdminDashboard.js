@@ -62,16 +62,7 @@ function AdminDashboard() {
       return json;
     };
 
-    const [
-      patientCount,
-      dentistCount,
-      appointmentCount,
-      revenueSum,
-      usersData,
-      inventoryData,
-      invoicesData,
-      remindersData,
-    ] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchJson('/api/patients/count'),
       fetchJson('/api/dentists/count'),
       fetchJson(`/api/appointments/count?date=${getToday()}&status=Scheduled`),
@@ -81,6 +72,17 @@ function AdminDashboard() {
       fetchJson('/api/invoices?limit=1000'),
       fetchJson('/api/reminders?limit=1000'),
     ]);
+
+    const getValue = (result, defaultValue) => result.status === 'fulfilled' ? result.value : defaultValue;
+
+    const patientCount = getValue(results[0], { count: 0 });
+    const dentistCount = getValue(results[1], { count: 0 });
+    const appointmentCount = getValue(results[2], { count: 0 });
+    const revenueSum = getValue(results[3], { total: 0 });
+    const usersData = getValue(results[4], { data: [] });
+    const inventoryData = getValue(results[5], { data: [] });
+    const invoicesData = getValue(results[6], { data: [] });
+    const remindersData = getValue(results[7], { data: [] });
 
     setTotalPatients(patientCount.count);
     setActiveDentists(dentistCount.count);

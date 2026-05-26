@@ -13,6 +13,10 @@ const getIncludeOptions = (appointmentWhere = {}) => [
     attributes: ['appointment_id', 'appointment_date', 'appointment_time'],
     where: appointmentWhere,
     required: Object.keys(appointmentWhere).length > 0
+  },
+  {
+    model: Patient,
+    attributes: ['patient_id', 'first_name', 'last_name']
   }
 ];
 
@@ -120,11 +124,13 @@ const reminderController = {
 
   create: async (req, res) => {
     try {
-      const { type, sent_date, status, appointment_id } = req.body;
+      const { reminder_type, type, scheduled_date, send_at, sent_date, status, appointment_id } = req.body;
+      const reminderType = reminder_type || type;
+      const scheduledDate = scheduled_date || send_at || sent_date;
 
-      if (!type || !appointment_id) {
+      if (!reminderType || !appointment_id || !scheduledDate) {
         return res.status(400).json({
-          message: 'Fushat e detyrueshme mungojnë: type, appointment_id.'
+          message: 'Fushat e detyrueshme mungojnë: type, send_at, appointment_id.'
         });
       }
 
@@ -140,10 +146,12 @@ const reminderController = {
       }
 
       const newReminder = await Reminder.create({
-        type,
-        sent_date: sent_date || null,
+        type: reminderType,
+        send_at: scheduledDate,
+        sent_date: null,
         status: status || 'Pending',
-        appointment_id
+        appointment_id,
+        patient_id: appointment.patient_id
       });
 
       const result = await Reminder.findOne({
@@ -166,7 +174,9 @@ const reminderController = {
   update: async (req, res) => {
     try {
       const { id } = req.params;
-      const { type, sent_date, status, appointment_id } = req.body;
+      const { reminder_type, type, scheduled_date, send_at, sent_date, status, appointment_id } = req.body;
+      const reminderType = reminder_type || type;
+      const scheduledDate = scheduled_date || send_at;
 
       const reminder = await Reminder.findByPk(id);
       if (!reminder) {
@@ -187,10 +197,15 @@ const reminderController = {
       }
 
       const updateData = {};
-      if (type) updateData.type = type;
+      if (reminderType) updateData.type = reminderType;
+      if (scheduledDate !== undefined) updateData.send_at = scheduledDate;
       if (sent_date !== undefined) updateData.sent_date = sent_date;
       if (status) updateData.status = status;
-      if (appointment_id) updateData.appointment_id = appointment_id;
+      if (appointment_id) {
+        const appointment = await Appointment.findByPk(appointment_id);
+        updateData.appointment_id = appointment_id;
+        updateData.patient_id = appointment.patient_id;
+      }
 
       await reminder.update(updateData);
 

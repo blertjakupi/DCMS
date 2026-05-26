@@ -36,6 +36,7 @@ function LoginPage() {
 
      const role = data.user.roles?.[0];
 	if (role === 'ADMIN') navigate('/admin/dashboard');
+	else if (role === 'DENTIST') navigate('/dentist/dashboard');
 	else if (role === 'PATIENT') navigate('/portal/dashboard');
 	else navigate('/dashboard');
     } catch (err) {

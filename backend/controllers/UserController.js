@@ -4,7 +4,9 @@ const {
   sequelize,
   User,
   Role,
-  RefreshToken
+  RefreshToken,
+  Patient,
+  Dentist
 } = require('../models');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -155,6 +157,24 @@ const userController = {
         },
         { transaction }
       );
+	  
+	  
+
+if (role.normalized_name === 'DENTIST') {
+  await Dentist.create(
+    {
+      user_id: newUser.user_id,
+      first_name,
+      last_name,
+      email,
+      phone: phone_number || null,
+      specialization: 'General Dentistry',
+      status: 'Active',
+      is_deleted: false
+    },
+    { transaction }
+  );
+}
 
       
       await transaction.commit();
@@ -247,6 +267,16 @@ const userController = {
             message: 'Roli i specifikuar nuk ekziston.'
           });
         }
+        
+        if (role_id !== user.role_id) {
+          const oldRole = await Role.findByPk(user.role_id, { transaction });
+          if (oldRole && oldRole.normalized_name === 'PATIENT' && role.normalized_name !== 'PATIENT') {
+            await Patient.update(
+              { is_deleted: true, status: 'Inactive' },
+              { where: { user_id: id }, transaction }
+            );
+          }
+        }
       }
 
       const updateData = {};
@@ -268,6 +298,31 @@ const userController = {
       }
 
       await user.update(updateData, { transaction });
+	  
+	  const { Dentist } = require('../models');
+
+if (role_id) {
+  const newRole = await Role.findByPk(role_id, { transaction });
+  if (newRole.normalized_name === 'DENTIST') {
+    const existing = await Dentist.findOne({ where: { user_id: id }, transaction });
+    if (!existing) {
+      await Dentist.create(
+        {
+          user_id: parseInt(id),
+          first_name: first_name || user.first_name,
+          last_name: last_name || user.last_name,
+          email: email || user.email,
+          phone: phone_number || user.phone_number || null,
+          specialization: 'General Dentistry',
+          status: 'Active',
+          is_deleted: false
+        },
+        { transaction }
+      );
+    }
+  }
+}
+	  
       await transaction.commit();
 
       const updatedUser = await User.findOne({

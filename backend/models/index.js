@@ -19,6 +19,7 @@ const Reminder = require('./Reminder');
 const InventoryItem = require('./InventoryItem');
 const InventoryTransaction = require('./InventoryTransaction');
 const DentistAvailability = require('./DentistAvailability');
+const Setting = require('./Setting');
 
 User.belongsTo(Role, { foreignKey: 'role_id' });
 Role.hasMany(User, { foreignKey: 'role_id' });
@@ -178,6 +179,13 @@ Appointment.hasMany(Reminder, {
 });
 Reminder.belongsTo(Appointment, { foreignKey: 'appointment_id' });
 
+Patient.hasMany(Reminder, {
+  foreignKey: 'patient_id',
+  onDelete: 'RESTRICT',
+  onUpdate: 'CASCADE'
+});
+Reminder.belongsTo(Patient, { foreignKey: 'patient_id' });
+
 InventoryItem.hasMany(InventoryTransaction, {
   foreignKey: 'item_id',
   onDelete: 'RESTRICT',
@@ -219,5 +227,6 @@ module.exports = {
   Reminder,
   InventoryItem,
   InventoryTransaction,
-  DentistAvailability
+  DentistAvailability,
+  Setting
 };
