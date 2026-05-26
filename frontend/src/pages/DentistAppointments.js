@@ -186,22 +186,23 @@ function DentistAppointments() {
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-md mb-lg mt-12">
-          <div>
-            <nav className="flex gap-2 text-caption text-on-surface-variant mb-1">
-              <span>Dentist</span>
-              <span>/</span>
-              <span className="text-primary font-bold">My Appointments</span>
-            </nav>
-            <h2 className="text-headline-lg font-headline-lg text-on-surface">My Appointments</h2>
-          </div>
-          <button
-            className="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-colors border border-outline-variant/30 flex items-center gap-2 px-4"
-            onClick={loadData}
-          >
-            <span className="material-symbols-outlined">refresh</span>
-            <span className="text-caption font-label-bold">Refresh</span>
-          </button>
+        <div>
+          <nav className="flex gap-2 text-caption text-on-surface-variant mb-1">
+            <span>Dentist</span>
+            <span>/</span>
+            <span className="text-primary font-bold">My Appointments</span>
+          </nav>
+          <h2 className="text-headline-lg font-headline-lg text-on-surface">My Appointments</h2>
+          <p className="text-body-base text-on-surface-variant mt-1">Your upcoming and past appointments</p>
         </div>
+        <button
+          className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
+          onClick={loadData}
+        >
+          <span className="material-symbols-outlined">refresh</span>
+          Refresh
+        </button>
+      </div>
 
         <div className="bg-surface-container-lowest rounded-2xl p-md shadow-[0_10px_30px_rgba(0,0,0,0.05)] mb-lg flex flex-wrap items-center gap-md">
           <div className="flex items-center gap-xs overflow-x-auto pb-1 md:pb-0">

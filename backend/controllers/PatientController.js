@@ -4,7 +4,9 @@ const {
   sequelize,
   User,
   Role,
-  Patient
+  Patient,
+  Appointment,
+  Dentist
 } = require('../models');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -399,7 +401,37 @@ const patientController = {
         console.error('GET ME PATIENT ERROR:', error);
         res.status(500).json({ message: 'Server error' });
       }
-    }
+    },
+    getMyPatients: async (req, res) => {
+      try {
+        const dentist = await Dentist.findOne({
+          where: { user_id: req.user.user_id, is_deleted: false }
+        });
+        if (!dentist) {
+          return res.status(404).json({ message: 'Dentist profile not found' });
+        }
+
+        const appointments = await Appointment.findAll({
+          where: { dentist_id: dentist.dentist_id, status: { [Op.ne]: 'Cancelled' } },
+          attributes: ['patient_id']
+        });
+
+        const patientIds = [...new Set(appointments.map(a => a.patient_id))];
+        if (patientIds.length === 0) {
+          return res.json({ data: [] });
+        }
+
+        const patients = await Patient.findAll({
+          where: { patient_id: { [Op.in]: patientIds }, is_deleted: false },
+          include: [{ model: User, attributes: ['first_name', 'last_name', 'email', 'phone_number', 'status'] }]
+        });
+
+        res.json({ data: patients });
+      } catch (error) {
+        console.error('GET MY PATIENTS ERROR:', error);
+        res.status(500).json({ message: 'Server error' });
+      }
+  },
 };
    
 

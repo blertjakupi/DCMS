@@ -2,6 +2,7 @@ require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const { sequelize, Setting } = require('./models');
 
+const seedDatabase = require('./utils/seedDatabase');
 const authController = require('./controllers/authController');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -59,7 +60,7 @@ sequelize.authenticate()
   })
   .then(() => {
     console.log('Models synchronized successfully.');
-    return Setting.seedDefaults();
+    return seedDatabase();
   })
   .then(() => {
     console.log('Default settings seeded successfully.');

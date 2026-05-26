@@ -16,7 +16,8 @@ import TreatmentsManagement from './pages/TreatmentsManagement';
 import RemindersPage from './pages/RemindersPage';
 import SystemSettings from './pages/SystemSettings';
 import DentistAppointments from './pages/DentistAppointments';
-
+import PatientsView from './pages/PatientsView';
+import DentistDentalRecords from './pages/DentistDentalRecords';
 
 function App() {
   return (
@@ -42,7 +43,7 @@ function App() {
           }
         />
         <Route
-		  path="/dentist/appointments"
+          path="/dentist/appointments"
           element={
             <PrivateRoute allowedRoles={['DENTIST']}>
               <DentistAppointments />
@@ -53,7 +54,7 @@ function App() {
           path="/dentist/patients"
           element={
             <PrivateRoute allowedRoles={['DENTIST']}>
-              <PatientsManagement />
+              <PatientsView />
             </PrivateRoute>
           }
         />
@@ -61,7 +62,7 @@ function App() {
           path="/dentist/dental-records"
           element={
             <PrivateRoute allowedRoles={['DENTIST']}>
-              <DentalRecordsManagement />
+              <DentistDentalRecords />
             </PrivateRoute>
           }
         />

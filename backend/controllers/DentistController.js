@@ -4,7 +4,10 @@ const {
   sequelize,
   User,
   Role,
-  Dentist
+  Dentist,
+  Appointment,
+  Patient,
+  DentalRecord
 } = require('../models');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,6 +37,18 @@ const dentistController = {
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë marrjes së dentistëve.'
       });
+    }
+  },
+  getMe: async (req, res) => {
+    try {
+      const dentist = await Dentist.findOne({
+        where: { user_id: req.user.user_id, is_deleted: false },
+        include: [{ model: User, attributes: ['first_name', 'last_name', 'email'] }]
+      });
+      if (!dentist) return res.status(404).json({ message: 'Dentist profile not found' });
+      res.json(dentist);
+    } catch (error) {
+      res.status(500).json({ message: 'Server error' });
     }
   },
 
@@ -376,6 +391,141 @@ const dentistController = {
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë fshirjes së dentistit.'
       });
+    }
+  },
+
+  getDashboard: async (req, res) => {
+    try {
+      const dentist = await Dentist.findOne({
+        where: { user_id: req.user.user_id, is_deleted: false },
+        include: [{ model: User, attributes: ['first_name', 'last_name', 'email'] }]
+      });
+      if (!dentist) return res.status(404).json({ message: 'Dentist not found' });
+
+      const dentistId = dentist.dentist_id;
+      const today = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      const todayApps = await Appointment.findAll({
+        where: {
+          dentist_id: dentistId,
+          appointment_date: today,
+          status: { [Op.ne]: 'Cancelled' }
+        },
+        include: [{ model: Patient, attributes: ['first_name', 'last_name'] }],
+        order: [['appointment_time', 'ASC']]
+      });
+
+      const patientsSeenCount = await Appointment.count({
+        where: { dentist_id: dentistId, status: { [Op.ne]: 'Cancelled' } },
+        distinct: true,
+        col: 'patient_id'
+      });
+
+      const pendingRecordsCount = await DentalRecord.count({
+        where: { dentist_id: dentistId }
+      });
+
+      const nextAppointment = await Appointment.findOne({
+        where: {
+          dentist_id: dentistId,
+          status: { [Op.notIn]: ['Cancelled', 'Completed', 'No-Show'] },
+          [Op.or]: [
+            { appointment_date: { [Op.gt]: today } },
+            { appointment_date: today, appointment_time: { [Op.gte]: currentTime } }
+          ]
+        },
+        include: [{ model: Patient, attributes: ['first_name', 'last_name'] }],
+        order: [['appointment_date', 'ASC'], ['appointment_time', 'ASC']]
+      });
+
+      const schedule = todayApps.map(a => ({
+        appointment_id: a.appointment_id,
+        appointment_time: a.appointment_time.slice(0, 5),
+        patient_name: `${a.Patient?.first_name || ''} ${a.Patient?.last_name || ''}`.trim(),
+        treatment_name: a.treatment_name || `Treatment #${a.treatment_id}`,
+        status: a.status
+      }));
+
+      const queueApps = todayApps.filter(a => a.appointment_time >= currentTime && a.status === 'Scheduled');
+      const queue = queueApps.map(a => {
+        const patientName = `${a.Patient?.first_name || ''} ${a.Patient?.last_name || ''}`.trim() || 'Unknown';
+        const initials = patientName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+        const apptDateTime = new Date(`${a.appointment_date}T${a.appointment_time}`);
+        const diffMinutes = Math.round((apptDateTime - now) / 60000);
+        return {
+          initials,
+          name: patientName,
+          location: diffMinutes > 5 ? 'Waiting Room' : 'Ready',
+          time: a.appointment_time.slice(0, 5),
+          wait: diffMinutes > 0 ? `${diffMinutes}m wait` : 'Now',
+          active: a.appointment_time === queueApps[0]?.appointment_time
+        };
+      });
+
+      const recentRecords = await DentalRecord.findAll({
+        where: { dentist_id: dentistId },
+        include: [{ model: Patient, attributes: ['first_name', 'last_name'] }],
+        order: [['record_date', 'DESC']],
+        limit: 3
+      });
+      const recent = recentRecords.map(rec => {
+        const patientName = rec.Patient ? `${rec.Patient.first_name} ${rec.Patient.last_name}` : `Patient #${rec.patient_id}`;
+        const initials = patientName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+        return {
+          initials,
+          name: patientName,
+          lastVisit: rec.record_date,
+          treatment: rec.condition || 'Exam',
+          color: 'bg-tertiary-container/30 text-on-tertiary-container'
+        };
+      });
+
+      res.json({
+        dentist: {
+          first_name: dentist.first_name,
+          last_name: dentist.last_name
+        },
+        stats: {
+          todayAppointmentsCount: todayApps.length,
+          patientsSeenCount,
+          pendingRecordsCount
+        },
+        nextAppointment: nextAppointment ? {
+          time: nextAppointment.appointment_time.slice(0, 5),
+          patient_name: `${nextAppointment.Patient?.first_name || ''} ${nextAppointment.Patient?.last_name || ''}`.trim(),
+          minutes_to_go: Math.max(0, Math.ceil((new Date(`${nextAppointment.appointment_date}T${nextAppointment.appointment_time}`) - now) / 60000))
+        } : null,
+        schedule,
+        queue,
+        recentRecords: recent
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  getPatientsByDentist: async (req, res) => {
+    try {
+      const dentistId = req.params.id;
+      const appointments = await Appointment.findAll({
+        where: { dentist_id: dentistId, status: { [Op.ne]: 'Cancelled' } },
+        include: [{ model: Patient, where: { is_deleted: false } }],
+        attributes: []
+      });
+      const uniquePatients = [];
+      const seen = new Set();
+      appointments.forEach(app => {
+        if (app.Patient && !seen.has(app.Patient.patient_id)) {
+          seen.add(app.Patient.patient_id);
+          uniquePatients.push(app.Patient);
+        }
+      });
+      res.json({ data: uniquePatients });
+    } catch (error) {
+      res.status(500).json({ message: 'Server error' });
     }
   }
 };

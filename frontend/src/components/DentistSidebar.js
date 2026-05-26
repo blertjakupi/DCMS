@@ -35,7 +35,7 @@ function DentistSidebar() {
           return (
             <Link
               key={item.label}
-              href={item.path}
+              to={item.path}   // ✅ Changed from href to to
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 active:scale-[0.98] ${
                 isActive
                   ? 'bg-primary-container text-on-primary-container font-bold'

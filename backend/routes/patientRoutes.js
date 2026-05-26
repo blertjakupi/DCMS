@@ -7,8 +7,9 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 router.use(authMiddleware);
 
 router.get('/count', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.countActive);
-router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.getAll);
 router.get('/me', roleMiddleware('PATIENT'), patientController.getMe);
+router.get('/my', roleMiddleware('DENTIST'), patientController.getMyPatients);
+router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.getAll);
 router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.getById);
 router.post('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.create);
 router.put('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST'), patientController.update);
