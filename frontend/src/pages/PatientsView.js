@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import DentistSidebar from '../components/DentistSidebar';
 
 const emptyForm = {
@@ -39,27 +38,27 @@ const formatDate = (value) => {
 };
 
 function PatientsView() {
-  const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dentistId, setDentistId] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Dental record modal states
+  
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [dentists, setDentists] = useState([]);
   const [patientAppointments, setPatientAppointments] = useState([]);
-  const [dentistId, setDentistId] = useState(null);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
-  // Fetch logged‑in dentist ID and dentists list on mount
+  
   useEffect(() => {
     fetch('/api/dentists/me', { headers: authHeaders() })
       .then(res => res.json())
@@ -74,36 +73,34 @@ function PatientsView() {
       .catch(err => console.error(err));
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const dentistRes = await fetch('/api/dentists/me', { headers: authHeaders() });
-      if (!dentistRes.ok) throw new Error('Could not fetch dentist profile');
-      const dentistData = await dentistRes.json();
-      const dId = dentistData.dentist_id;
-
-      const appointmentsRes = await fetch(`/api/appointments/dentist/${dId}`, { headers: authHeaders() });
-      if (!appointmentsRes.ok) throw new Error('Could not load appointments');
-      const appointmentsJson = await appointmentsRes.json();
-      setAppointments(appointmentsJson.data || []);
-
-      const patientsRes = await fetch('/api/patients/my', { headers: authHeaders() });
-      if (!patientsRes.ok) throw new Error('Could not load patients');
-      const patientsJson = await patientsRes.json();
-      setPatients(patientsJson.data || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!dentistId) return;
+    const loadData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        
+        const patientsRes = await fetch(`/api/dentists/${dentistId}/patients`, { headers: authHeaders() });
+        if (!patientsRes.ok) throw new Error('Could not load patients');
+        const patientsJson = await patientsRes.json();
+        setPatients(patientsJson.data || []);
 
-  // Fetch patient‑specific appointments when form.patient_id changes
+        
+        const appointmentsRes = await fetch(`/api/appointments/dentist/${dentistId}`, { headers: authHeaders() });
+        if (!appointmentsRes.ok) throw new Error('Could not load appointments');
+        const appointmentsJson = await appointmentsRes.json();
+        setAppointments(appointmentsJson.data || []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [dentistId, refreshTrigger]);
+
+  
   useEffect(() => {
     if (!form.patient_id) {
       setPatientAppointments([]);
@@ -152,7 +149,6 @@ function PatientsView() {
     return { total: patients.length, active, inactive: patients.length - active };
   }, [patients]);
 
-  // Modal handlers
   const openCreateForPatient = (patientId) => {
     setEditingId(null);
     setForm({
@@ -187,13 +183,17 @@ function PatientsView() {
       setQuickAddOpen(false);
       setForm(emptyForm);
       setEditingId(null);
-      // Optionally refresh the patient list (no direct effect, but we could refresh appointments)
-      await loadData();
+      // Refresh the data after saving
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const refreshData = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -239,7 +239,7 @@ function PatientsView() {
           </div>
           <button
             className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-            onClick={loadData}
+            onClick={refreshData}
           >
             <span className="material-symbols-outlined">refresh</span>
             Refresh
@@ -391,7 +391,7 @@ function PatientsView() {
         </div>
       </main>
 
-      {/* Dental Record Modal */}
+      {}
       <div
         className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           quickAddOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'

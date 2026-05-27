@@ -51,7 +51,6 @@ const formatTime = (value) => {
 
 function DentistAppointments() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const dentistId = user?.dentist_id;
   const userInitials = user?.full_name ? initials(user.full_name) : 'DR';
 
   const [appointments, setAppointments] = useState([]);
@@ -59,6 +58,8 @@ function DentistAppointments() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dentistId, setDentistId] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [statusModal, setStatusModal] = useState({ open: false, appointment: null });
   const [newStatus, setNewStatus] = useState('');
@@ -66,31 +67,33 @@ function DentistAppointments() {
 
   const [detailModal, setDetailModal] = useState({ open: false, appointment: null });
 
-  const loadData = async () => {
-    if (!dentistId) {
-      setError('Dentist ID not found. Please log out and log back in.');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/appointments/dentist/${dentistId}`, {
-        headers: authHeaders(),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || 'Could not load appointments.');
-      setAppointments(json.data || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetch('/api/dentists/me', { headers: authHeaders() })
+      .then(res => res.json())
+      .then(data => setDentistId(data.dentist_id))
+      .catch(err => console.error(err));
+  }, []);
 
   useEffect(() => {
+    if (!dentistId) return;
+    const loadData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await fetch(`/api/appointments/dentist/${dentistId}`, {
+          headers: authHeaders(),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || 'Could not load appointments.');
+        setAppointments(json.data || []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
     loadData();
-  }, []);
+  }, [dentistId, refreshTrigger]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -149,12 +152,16 @@ function DentistAppointments() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || 'Could not update status.');
       setStatusModal({ open: false, appointment: null });
-      await loadData();
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const refreshData = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -186,23 +193,23 @@ function DentistAppointments() {
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-md mb-lg mt-12">
-        <div>
-          <nav className="flex gap-2 text-caption text-on-surface-variant mb-1">
-            <span>Dentist</span>
-            <span>/</span>
-            <span className="text-primary font-bold">My Appointments</span>
-          </nav>
-          <h2 className="text-headline-lg font-headline-lg text-on-surface">My Appointments</h2>
-          <p className="text-body-base text-on-surface-variant mt-1">Your upcoming and past appointments</p>
+          <div>
+            <nav className="flex gap-2 text-caption text-on-surface-variant mb-1">
+              <span>Dentist</span>
+              <span>/</span>
+              <span className="text-primary font-bold">My Appointments</span>
+            </nav>
+            <h2 className="text-headline-lg font-headline-lg text-on-surface">My Appointments</h2>
+            <p className="text-body-base text-on-surface-variant mt-1">Your upcoming and past appointments</p>
+          </div>
+          <button
+            className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
+            onClick={refreshData}
+          >
+            <span className="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
         </div>
-        <button
-          className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-          onClick={loadData}
-        >
-          <span className="material-symbols-outlined">refresh</span>
-          Refresh
-        </button>
-      </div>
 
         <div className="bg-surface-container-lowest rounded-2xl p-md shadow-[0_10px_30px_rgba(0,0,0,0.05)] mb-lg flex flex-wrap items-center gap-md">
           <div className="flex items-center gap-xs overflow-x-auto pb-1 md:pb-0">

@@ -251,7 +251,10 @@ function Dashboard() {
           <div className="bg-surface-container-lowest rounded-[24px] p-md md:p-lg shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-surface-container-highest/30">
             <div className="flex items-center justify-between mb-md">
               <h3 className="text-headline-md font-headline-md text-on-background">Recent Patient Records</h3>
-              <button className="flex items-center gap-xs text-primary font-label-bold hover:bg-primary-container/10 px-3 py-1.5 rounded-lg transition-colors text-sm">
+              <button
+                className="flex items-center gap-xs text-primary font-label-bold hover:bg-primary-container/10 px-3 py-1.5 rounded-lg transition-colors text-sm"
+                onClick={() => navigate('/dentist/dental-records')}
+              >
                 View All <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
               </button>
             </div>

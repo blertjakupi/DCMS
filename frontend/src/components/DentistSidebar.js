@@ -35,7 +35,7 @@ function DentistSidebar() {
           return (
             <Link
               key={item.label}
-              to={item.path}   // ✅ Changed from href to to
+              to={item.path}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 active:scale-[0.98] ${
                 isActive
                   ? 'bg-primary-container text-on-primary-container font-bold'
@@ -50,10 +50,6 @@ function DentistSidebar() {
       </div>
 
       <div className="mt-auto pt-4 border-t border-surface-variant space-y-1">
-        <Link to="/dentist/appointments" className="w-full flex items-center gap-3 px-4 py-3 bg-primary text-on-primary hover:bg-[#005049] rounded-lg transition-colors duration-200 font-semibold">
-          <span className="material-symbols-outlined">add</span>
-          <span>New Appointment</span>
-        </Link>
         <Link to="#" className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200">
           <span className="material-symbols-outlined">help</span>
           <span>Support</span>

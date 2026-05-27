@@ -49,6 +49,7 @@ function DentistDentalRecords() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [dentistId, setDentistId] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
@@ -63,44 +64,39 @@ function DentistDentalRecords() {
       .catch(err => console.error(err));
   }, []);
 
-  const fetchData = async () => {
-    if (!dentistId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const [recordsRes, patientsRes, dentistsRes, appointmentsRes] = await Promise.all([
-        fetch(`/api/dental-records/dentist/${dentistId}`, { headers: authHeaders() }),
-        fetch('/api/patients/my', { headers: authHeaders() }),
-        fetch('/api/dentists', { headers: authHeaders() }),
-        fetch(`/api/appointments/dentist/${dentistId}`, { headers: authHeaders() })
-      ]);
-
-      const recordsJson = await recordsRes.json();
-      if (!recordsRes.ok) throw new Error(recordsJson.message || 'Could not load dental records');
-      setRecords(recordsJson.data || []);
-
-      const patientsJson = await patientsRes.json();
-      if (!patientsRes.ok) throw new Error(patientsJson.message || 'Could not load patients');
-      setPatients(patientsJson.data || []);
-
-      const dentistsJson = await dentistsRes.json();
-      if (!dentistsRes.ok) throw new Error(dentistsJson.message || 'Could not load dentists');
-      setDentists(dentistsJson.data || []);
-
-      if (appointmentsRes.ok) {
-        const appointmentsJson = await appointmentsRes.json();
-        setAppointments(appointmentsJson.data || []);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    if (!dentistId) return;
+    const fetchData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [recordsRes, patientsRes, dentistsRes, appointmentsRes] = await Promise.all([
+          fetch(`/api/dental-records/dentist/${dentistId}`, { headers: authHeaders() }),
+          fetch('/api/patients/my', { headers: authHeaders() }),
+          fetch('/api/dentists', { headers: authHeaders() }),
+          fetch(`/api/appointments/dentist/${dentistId}`, { headers: authHeaders() })
+        ]);
+        const recordsJson = await recordsRes.json();
+        if (!recordsRes.ok) throw new Error(recordsJson.message || 'Could not load dental records');
+        setRecords(recordsJson.data || []);
+        const patientsJson = await patientsRes.json();
+        if (!patientsRes.ok) throw new Error(patientsJson.message || 'Could not load patients');
+        setPatients(patientsJson.data || []);
+        const dentistsJson = await dentistsRes.json();
+        if (!dentistsRes.ok) throw new Error(dentistsJson.message || 'Could not load dentists');
+        setDentists(dentistsJson.data || []);
+        if (appointmentsRes.ok) {
+          const appointmentsJson = await appointmentsRes.json();
+          setAppointments(appointmentsJson.data || []);
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchData();
-  }, [dentistId]);
+  }, [dentistId, refreshTrigger]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -197,7 +193,7 @@ function DentistDentalRecords() {
       setForm(emptyForm);
       setEditingId(null);
       setQuickAddOpen(false);
-      await fetchData();
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -221,7 +217,7 @@ function DentistDentalRecords() {
   };
 
   const refreshData = () => {
-    fetchData();
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
