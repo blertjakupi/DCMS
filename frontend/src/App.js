@@ -4,6 +4,10 @@ import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import PatientPortal from './pages/PatientPortal';
+import PatientAppointments from './pages/PatientAppointments';
+import PatientMyRecords from './pages/PatientMyRecords';
+import PatientBilling from './pages/PatientBilling';
+import PatientProfile from './pages/PatientProfile';
 import PrivateRoute from './components/PrivateRoute';
 import UserManagement from './pages/UserManagement';
 import AppointmentsManagement from './pages/AppointmentsManagement';
@@ -171,13 +175,46 @@ function App() {
           }
         />
         <Route
-          path="/portal/dashboard"
+          path="/patient/dashboard"
           element={
             <PrivateRoute allowedRoles={['PATIENT']}>
               <PatientPortal />
             </PrivateRoute>
           }
         />
+        <Route
+          path="/patient/appointments"
+          element={
+            <PrivateRoute allowedRoles={['PATIENT']}>
+              <PatientAppointments />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/patient/records"
+          element={
+            <PrivateRoute allowedRoles={['PATIENT']}>
+              <PatientMyRecords />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/patient/billing"
+          element={
+            <PrivateRoute allowedRoles={['PATIENT']}>
+              <PatientBilling />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/patient/profile"
+          element={
+            <PrivateRoute allowedRoles={['PATIENT']}>
+              <PatientProfile />
+            </PrivateRoute>
+          }
+        />
+        <Route path="/portal/dashboard" element={<Navigate to="/patient/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
