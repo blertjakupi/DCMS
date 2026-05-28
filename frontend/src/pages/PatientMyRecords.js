@@ -1,50 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
+
+const authHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+  'Content-Type': 'application/json',
+});
 
 const recordTypes = ['All', 'Treatments', 'X-Rays', 'Documents'];
 
-const records = [
-  {
-    id: 1,
-    type: 'Treatments',
-    icon: 'dentistry',
-    iconClass: 'bg-surface-container text-primary',
-    title: 'Root Canal Treatment',
-    provider: 'Dr. Sarah Smith',
-    date: 'Oct 15, 2023',
-    status: 'Completed',
-  },
-  {
-    id: 2,
-    type: 'X-Rays',
-    icon: 'image',
-    iconClass: 'bg-secondary-container/30 text-secondary',
-    title: 'Panoramic X-Ray',
-    provider: 'Radiology Dept',
-    date: 'Sep 12, 2023',
-    status: 'Available',
-  },
-  {
-    id: 3,
-    type: 'Documents',
-    icon: 'description',
-    iconClass: 'bg-tertiary-container/20 text-tertiary',
-    title: 'Treatment Summary PDF',
-    provider: 'Dr. John Doe',
-    date: 'Aug 05, 2023',
-    status: 'Available',
-  },
-  {
-    id: 4,
-    type: 'Treatments',
-    icon: 'dentistry',
-    iconClass: 'bg-surface-container text-primary',
-    title: 'Cavity Filling',
-    provider: 'Dr. Sarah Smith',
-    date: 'Jun 20, 2023',
-    status: 'Completed',
-  },
-];
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 const statusStyles = {
   Completed: {
@@ -58,23 +29,116 @@ const statusStyles = {
 };
 
 function PatientMyRecords() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [patient, setPatient] = useState(null);
+  const [records, setRecords] = useState([]);
   const [activeType, setActiveType] = useState('All');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const initPage = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        if (!patRes.ok) throw new Error('Failed to load patient profile');
+        const patData = await patRes.json();
+        setPatient(patData);
+
+        const recRes = await fetch(`/api/dental-records/patient/${patData.patient_id}`, { headers: authHeaders() });
+        if (!recRes.ok) throw new Error('Failed to load dental records');
+        const recData = await recRes.json();
+        setRecords(recData.data || []);
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initPage();
+  }, []);
+
+  const mappedRecords = useMemo(() => {
+    return records.map((rec) => {
+      const condition = rec.condition || 'Dental Examination';
+      const notes = rec.notes || 'Routine checkup and dental cleaning.';
+      
+      // Determine Type
+      let type = 'Treatments';
+      let icon = 'dentistry';
+      let iconClass = 'bg-surface-container text-primary';
+
+      const conditionLower = condition.toLowerCase();
+      if (conditionLower.includes('x-ray') || conditionLower.includes('röntgen') || conditionLower.includes('rentgen') || conditionLower.includes('radiology')) {
+        type = 'X-Rays';
+        icon = 'image';
+        iconClass = 'bg-secondary-container/30 text-secondary';
+      } else if (conditionLower.includes('pdf') || conditionLower.includes('document') || conditionLower.includes('fletë') || conditionLower.includes('raport')) {
+        type = 'Documents';
+        icon = 'description';
+        iconClass = 'bg-tertiary-container/20 text-tertiary';
+      }
+
+      const dentistName = rec.Dentist ? `Dr. ${rec.Dentist.first_name} ${rec.Dentist.last_name}` : 'General Clinic';
+
+      return {
+        id: rec.record_id,
+        type,
+        icon,
+        iconClass,
+        title: condition,
+        provider: dentistName,
+        date: formatDate(rec.record_date),
+        notes,
+        tooth: rec.tooth,
+        status: 'Available',
+      };
+    });
+  }, [records]);
 
   const visibleRecords = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return records.filter((record) => {
+    return mappedRecords.filter((record) => {
       const matchesType = activeType === 'All' || record.type === activeType;
       const matchesSearch =
         !query ||
         record.title.toLowerCase().includes(query) ||
         record.provider.toLowerCase().includes(query) ||
+        record.notes.toLowerCase().includes(query) ||
         record.date.toLowerCase().includes(query);
 
       return matchesType && matchesSearch;
     });
-  }, [activeType, search]);
+  }, [activeType, search, mappedRecords]);
+
+  if (loading) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-on-surface">
+        <span className="material-symbols-outlined text-primary text-[48px] animate-spin mb-4">
+          progress_activity
+        </span>
+        <p className="text-body-lg">Loading records...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-error">
+        <span className="material-symbols-outlined text-[48px] mb-4">error</span>
+        <p className="text-body-lg font-bold">Error: {error}</p>
+        <button onClick={() => window.location.reload()} className="mt-4 bg-primary text-on-primary px-6 py-2 rounded-full font-label-bold">
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  const lastUpdated = mappedRecords.length > 0 ? mappedRecords[0].date : 'N/A';
 
   return (
     <div className="bg-background min-h-screen flex flex-col text-on-background font-body-base">
@@ -90,12 +154,6 @@ function PatientMyRecords() {
               View your dental history, treatment notes, and documents.
             </p>
           </div>
-          <button className="bg-primary text-on-primary font-label-bold px-6 py-3 rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm active:scale-95 flex items-center gap-2">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
-              description
-            </span>
-            Request Records
-          </button>
         </header>
 
         <section className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 border-b border-outline-variant/30 pb-4">
@@ -132,7 +190,7 @@ function PatientMyRecords() {
         {visibleRecords.length > 0 ? (
           <div className="flex flex-col gap-4 mb-12">
             {visibleRecords.map((record) => {
-              const status = statusStyles[record.status];
+              const status = statusStyles[record.status] || statusStyles.Available;
 
               return (
                 <article
@@ -140,12 +198,17 @@ function PatientMyRecords() {
                   className="bg-surface rounded-xl p-6 border border-outline-variant/20 shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-6"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${record.iconClass}`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${record.iconClass}`}>
                       <span className="material-symbols-outlined">{record.icon}</span>
                     </div>
                     <div>
-                      <h3 className="text-headline-md font-headline-md text-on-background">{record.title}</h3>
-                      <div className="text-body-base text-on-surface-variant flex items-center gap-2 mt-1">
+                      <h3 className="text-headline-md font-headline-md text-on-background">
+                        {record.title} {record.tooth && <span className="text-primary-container bg-primary/10 px-2 py-0.5 rounded text-sm ml-2">Tooth {record.tooth}</span>}
+                      </h3>
+                      <p className="text-body-base text-on-surface-variant mt-1 mb-2 max-w-xl">
+                        {record.notes}
+                      </p>
+                      <div className="text-caption text-on-surface-variant flex items-center gap-2 mt-1 font-semibold">
                         <span>{record.provider}</span>
                         <span className="text-outline-variant">•</span>
                         <span>{record.date}</span>
@@ -153,22 +216,11 @@ function PatientMyRecords() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                  <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t border-outline-variant/10 pt-4 md:pt-0 md:border-t-0 shrink-0">
                     <span className={`px-3 py-1 rounded-full text-caption font-label-bold flex items-center gap-1 ${status.className}`}>
                       <span className="material-symbols-outlined text-[14px]">{status.icon}</span>
                       {record.status}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <button className="text-primary hover:bg-surface-container px-4 py-2 rounded-lg font-label-bold transition-colors">
-                        View
-                      </button>
-                      <button
-                        aria-label={`Download ${record.title}`}
-                        className="text-on-surface-variant hover:bg-surface-container p-2 rounded-lg transition-colors"
-                      >
-                        <span className="material-symbols-outlined">download</span>
-                      </button>
-                    </div>
                   </div>
                 </article>
               );
@@ -187,8 +239,8 @@ function PatientMyRecords() {
         )}
 
         <footer className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 font-label-bold text-outline px-2">
-          <span>Total Records: 14</span>
-          <span>Last Updated: Oct 20, 2023</span>
+          <span>Total Records: {mappedRecords.length}</span>
+          <span>Last Updated: {lastUpdated}</span>
         </footer>
       </main>
     </div>

@@ -1,63 +1,87 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
+
+const authHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+  'Content-Type': 'application/json',
+});
 
 const filters = ['All', 'Pending', 'Paid', 'Overdue'];
 
-const summaryItems = [
-  { label: 'Total Due', value: '$120.00', valueClass: 'text-error' },
-  { label: 'Paid This Year', value: '$1,450.00', valueClass: 'text-primary' },
-  { label: 'Next Due Date', value: 'Nov 15, 2023', valueClass: 'text-on-surface' },
-];
-
-const invoices = [
-  {
-    id: 'INV-2023-041',
-    title: 'Root Canal Treatment',
-    provider: 'Dr. Sarah Smith',
-    date: 'Oct 15, 2023',
-    amount: '$120.00',
-    status: 'Pending',
-  },
-  {
-    id: 'INV-2023-038',
-    title: 'General Consultation & Cleaning',
-    provider: 'Dr. James Wilson',
-    date: 'Sep 02, 2023',
-    amount: '$250.00',
-    status: 'Paid',
-  },
-  {
-    id: 'INV-2023-025',
-    title: 'Dental X-Ray & Exam',
-    provider: 'Dr. Sarah Smith',
-    date: 'Jun 18, 2023',
-    amount: '$180.00',
-    status: 'Paid',
-  },
-  {
-    id: 'INV-2023-012',
-    title: 'Teeth Whitening Procedure',
-    provider: 'Dr. James Wilson',
-    date: 'Feb 10, 2023',
-    amount: '$450.00',
-    status: 'Paid',
-  },
-];
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 const statusStyles = {
   Pending: 'bg-secondary-container text-on-secondary-container',
   Paid: 'bg-tertiary-fixed text-on-tertiary-fixed-variant',
   Overdue: 'bg-error-container text-on-error-container',
+  'Partially Paid': 'bg-secondary-container text-on-secondary-container',
+  Unpaid: 'bg-error-container text-on-error-container',
 };
 
 function PatientBilling() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [patient, setPatient] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [activeFilter, setActiveFilter] = useState('All');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const initPage = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        if (!patRes.ok) throw new Error('Failed to load patient profile');
+        const patData = await patRes.json();
+        setPatient(patData);
+
+        const invRes = await fetch('/api/invoices', { headers: authHeaders() });
+        if (!invRes.ok) throw new Error('Failed to load invoices');
+        const invData = await invRes.json();
+        setInvoices(invData.data || []);
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initPage();
+  }, []);
+
+  // Map backend status to frontend display status
+  const mappedInvoices = useMemo(() => {
+    return invoices.map(inv => {
+      const displayStatus = inv.status === 'Unpaid' ? 'Pending' : inv.status;
+      const title = inv.Appointment?.notes || 'Dental Care Treatment';
+      const provider = 'DentaCare Pro Clinic';
+
+      return {
+        id: `INV-2026-${inv.invoice_id.toString().padStart(3, '0')}`,
+        title,
+        provider,
+        date: formatDate(inv.invoice_date),
+        amount: `$${parseFloat(inv.total_amount).toFixed(2)}`,
+        rawAmount: parseFloat(inv.total_amount),
+        status: displayStatus, // Pending, Paid, Overdue, Partially Paid
+        invoiceDateRaw: new Date(inv.invoice_date)
+      };
+    });
+  }, [invoices]);
 
   const visibleInvoices = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return invoices.filter((invoice) => {
+    return mappedInvoices.filter((invoice) => {
       const matchesFilter = activeFilter === 'All' || invoice.status === activeFilter;
       const matchesSearch =
         !query ||
@@ -68,7 +92,60 @@ function PatientBilling() {
 
       return matchesFilter && matchesSearch;
     });
-  }, [activeFilter, search]);
+  }, [activeFilter, search, mappedInvoices]);
+
+  // Dynamic calculations for KPI summary items
+  const totalDue = useMemo(() => {
+    return mappedInvoices
+      .filter(inv => inv.status === 'Pending' || inv.status === 'Unpaid' || inv.status === 'Partially Paid')
+      .reduce((sum, inv) => sum + inv.rawAmount, 0);
+  }, [mappedInvoices]);
+
+  const paidThisYear = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return mappedInvoices
+      .filter(inv => inv.status === 'Paid' && inv.invoiceDateRaw.getFullYear() === currentYear)
+      .reduce((sum, inv) => sum + inv.rawAmount, 0);
+  }, [mappedInvoices]);
+
+  const nextDueDate = useMemo(() => {
+    const pending = mappedInvoices.filter(inv => inv.status === 'Pending' || inv.status === 'Partially Paid');
+    if (pending.length === 0) return 'No due date';
+    // Sort ascending by date
+    pending.sort((a, b) => a.invoiceDateRaw - b.invoiceDateRaw);
+    return pending[0].date;
+  }, [mappedInvoices]);
+
+  const summaryItems = useMemo(() => {
+    return [
+      { label: 'Total Due', value: `$${totalDue.toFixed(2)}`, valueClass: totalDue > 0 ? 'text-error' : 'text-primary' },
+      { label: 'Paid This Year', value: `$${paidThisYear.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, valueClass: 'text-primary' },
+      { label: 'Next Due Date', value: nextDueDate, valueClass: 'text-on-surface' },
+    ];
+  }, [totalDue, paidThisYear, nextDueDate]);
+
+  if (loading) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-on-surface">
+        <span className="material-symbols-outlined text-primary text-[48px] animate-spin mb-4">
+          progress_activity
+        </span>
+        <p className="text-body-lg">Loading billing records...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-error">
+        <span className="material-symbols-outlined text-[48px] mb-4">error</span>
+        <p className="text-body-lg font-bold">Error: {error}</p>
+        <button onClick={() => window.location.reload()} className="mt-4 bg-primary text-on-primary px-6 py-2 rounded-full font-label-bold">
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col antialiased font-body-base">
@@ -84,12 +161,6 @@ function PatientBilling() {
               View and manage your invoices and payment history.
             </p>
           </div>
-          <button className="bg-primary text-on-primary font-label-bold px-6 py-3 rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm active:scale-95 flex items-center gap-2">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
-              payment
-            </span>
-            Make a Payment
-          </button>
         </header>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -145,7 +216,7 @@ function PatientBilling() {
                 className="bg-surface rounded-[16px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-shadow flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group"
               >
                 <div className="flex flex-col gap-2 flex-grow">
-                  <span className="text-caption font-label-bold text-outline">#{invoice.id}</span>
+                  <span className="text-caption font-label-bold text-outline">{invoice.id}</span>
                   <h3 className="text-headline-md font-headline-md text-on-surface">{invoice.title}</h3>
                   <div className="text-body-base text-on-surface-variant flex items-center gap-2">
                     <span>{invoice.provider}</span>
@@ -157,20 +228,9 @@ function PatientBilling() {
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8 w-full md:w-auto">
                   <div className="flex flex-col items-start md:items-end w-full md:w-auto">
                     <span className="text-headline-md font-headline-md text-on-surface">{invoice.amount}</span>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-caption font-label-bold mt-1 ${statusStyles[invoice.status]}`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-caption font-label-bold mt-1 ${statusStyles[invoice.status] || 'bg-surface-variant'}`}>
                       {invoice.status}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-                    <button className="text-primary font-label-bold hover:underline transition-all px-2">
-                      View Invoice
-                    </button>
-                    <button
-                      aria-label={`Download ${invoice.id}`}
-                      className="text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-full transition-colors flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined">download</span>
-                    </button>
                   </div>
                 </div>
               </article>
@@ -189,8 +249,8 @@ function PatientBilling() {
         )}
 
         <footer className="flex justify-between items-center text-caption font-label-bold text-outline pt-4 pb-8">
-          <span>Total Invoices: 24</span>
-          <span>Last Updated: Oct 20, 2023</span>
+          <span>Total Invoices: {mappedInvoices.length}</span>
+          <span>Last Updated: {nextDueDate}</span>
         </footer>
       </main>
     </div>

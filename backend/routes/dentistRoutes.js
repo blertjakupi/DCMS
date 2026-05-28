@@ -10,8 +10,8 @@ router.get('/:id/patients', roleMiddleware('DENTIST'), dentistController.getPati
 router.get('/dashboard', roleMiddleware('DENTIST'), dentistController.getDashboard);
 router.get('/me', roleMiddleware('DENTIST'), dentistController.getMe);
 router.get('/count', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), dentistController.countActive);
-router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), dentistController.getAll);
-router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), dentistController.getById);
+router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), dentistController.getAll);
+router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), dentistController.getById);
 router.post('/', roleMiddleware('ADMIN'), dentistController.create);
 router.put('/:id', roleMiddleware('ADMIN'), dentistController.update);
 router.delete('/:id', roleMiddleware('ADMIN'), dentistController.delete);

@@ -37,8 +37,21 @@ exports.getAllInvoices = async (req, res) => {
     
     const where = {};
     if (status) where.status = status;
-    if (patient_id) where.patient_id = patient_id;
     if (appointment_id) where.appointment_id = appointment_id;
+
+    // Patient security: if PATIENT role, force filter by their patient_id
+    const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+    if (userRole === 'PATIENT') {
+      const ownPatient = await Patient.findOne({
+        where: { user_id: req.user.user_id, is_deleted: false }
+      });
+      if (!ownPatient) {
+        return res.status(404).json({ message: 'Patient profile not found' });
+      }
+      where.patient_id = ownPatient.patient_id;
+    } else {
+      if (patient_id) where.patient_id = patient_id;
+    }
 
     const invoices = await Invoice.findAndCountAll({
       where,
@@ -81,6 +94,17 @@ exports.getInvoiceById = async (req, res) => {
 
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    // Patient security: check if patient is allowed to see this invoice
+    const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+    if (userRole === 'PATIENT') {
+      const ownPatient = await Patient.findOne({
+        where: { user_id: req.user.user_id, is_deleted: false }
+      });
+      if (!ownPatient || invoice.patient_id !== ownPatient.patient_id) {
+        return res.status(403).json({ message: 'Nuk keni akses në këtë faturë.' });
+      }
     }
 
     res.json(invoice);

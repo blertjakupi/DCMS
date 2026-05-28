@@ -1,63 +1,222 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PatientNavbar from '../components/PatientNavbar';
 
-const summaryCards = [
-  {
-    icon: 'calendar_month',
-    label: 'Next Appointment',
-    title: 'Oct 24, 2:30 PM',
-    badge: 'Upcoming',
-    details: [
-      { icon: 'person', text: 'Dr. Sarah Smith' },
-      { icon: 'dentistry', text: 'Routine Cleaning' },
-    ],
-  },
-  {
-    icon: 'payments',
-    label: 'Outstanding Balance',
-    title: '$120.00',
-    action: 'Pay Now',
-  },
-  {
-    icon: 'history',
-    label: 'Last Visit',
-    title: 'Aug 12, 2024',
-    details: [{ icon: 'check_circle', text: 'Cavity Filling' }],
-    link: 'View summary',
-  },
-];
+const authHeaders = () => ({
+  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+  'Content-Type': 'application/json',
+});
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatTime = (timeStr) => {
+  if (!timeStr) return '';
+  const [hours, minutes] = timeStr.split(':');
+  const date = new Date();
+  date.setHours(parseInt(hours, 10), parseInt(minutes, 10));
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+};
 
 const quickActions = [
   { icon: 'event_available', label: 'Book Appointment', path: '/patient/appointments' },
-  { icon: 'chat_bubble', label: 'Message Clinic', path: '/patient/messages' },
   { icon: 'receipt_long', label: 'Pay Bill', path: '/patient/billing' },
-];
-
-const upcomingAppointments = [
-  {
-    month: 'Oct',
-    day: '24',
-    treatment: 'Routine Cleaning',
-    dentist: 'Dr. Sarah Smith',
-    time: '2:30 PM - 3:15 PM',
-  },
-];
-
-const recentActivities = [
-  {
-    icon: 'medical_information',
-    title: 'Cavity Filling',
-    date: 'Aug 12, 2024',
-    description: 'Lower right molar restoration completed successfully. No complications.',
-    tags: ['Dr. Smith', 'X-Rays taken'],
-  },
 ];
 
 function PatientPortal() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  const [patient, setPatient] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [records, setRecords] = useState([]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    const fetchAllData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // 1. Fetch patient profile
+        const patientRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        if (!patientRes.ok) throw new Error('Failed to fetch patient profile');
+        const patientData = await patientRes.json();
+        setPatient(patientData);
+
+        const patientId = patientData.patient_id;
+
+        // 2. Fetch appointments, invoices and dental records in parallel
+        const [appRes, invRes, recRes] = await Promise.all([
+          fetch(`/api/appointments/patient/${patientId}`, { headers: authHeaders() }),
+          fetch(`/api/invoices`, { headers: authHeaders() }),
+          fetch(`/api/dental-records/patient/${patientId}`, { headers: authHeaders() })
+        ]);
+
+        if (appRes.ok) {
+          const appData = await appRes.json();
+          setAppointments(appData.data || []);
+        }
+        if (invRes.ok) {
+          const invData = await invRes.json();
+          setInvoices(invData.data || []);
+        }
+        if (recRes.ok) {
+          const recData = await recRes.json();
+          setRecords(recData.data || []);
+        }
+
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, [navigate]);
+
   const user = useMemo(() => JSON.parse(localStorage.getItem('user') || '{}'), []);
-  const firstName = user.first_name || user.full_name?.split(' ')[0] || 'Alex';
+  const firstName = patient?.first_name || user.first_name || user.full_name?.split(' ')[0] || 'Patient';
+
+  // Calculations for summary cards
+  const nextAppointment = useMemo(() => {
+    const now = new Date();
+    // Filter scheduled future appointments
+    const scheduled = appointments.filter(app => {
+      if (app.status !== 'Scheduled') return false;
+      const appDateTime = new Date(`${app.appointment_date}T${app.appointment_time}`);
+      return appDateTime >= now;
+    });
+    // Sort ascending
+    scheduled.sort((a, b) => new Date(`${a.appointment_date}T${a.appointment_time}`) - new Date(`${b.appointment_date}T${b.appointment_time}`));
+    return scheduled[0] || null;
+  }, [appointments]);
+
+  const outstandingBalance = useMemo(() => {
+    return invoices
+      .filter(inv => inv.status === 'Unpaid' || inv.status === 'Partially Paid')
+      .reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0);
+  }, [invoices]);
+
+  const lastVisit = useMemo(() => {
+    // Find most recent completed appointment or dental record
+    const completed = appointments.filter(app => app.status === 'Completed');
+    completed.sort((a, b) => new Date(b.appointment_date) - new Date(a.appointment_date));
+    return completed[0] || null;
+  }, [appointments]);
+
+  const summaryCards = useMemo(() => {
+    return [
+      {
+        icon: 'calendar_month',
+        label: 'Next Appointment',
+        title: nextAppointment 
+          ? `${formatDate(nextAppointment.appointment_date)} at ${formatTime(nextAppointment.appointment_time)}`
+          : 'No upcoming visits',
+        badge: nextAppointment ? 'Upcoming' : null,
+        details: nextAppointment 
+          ? [
+              { icon: 'person', text: nextAppointment.Dentist ? `Dr. ${nextAppointment.Dentist.first_name} ${nextAppointment.Dentist.last_name}` : 'Dentist' },
+              { icon: 'dentistry', text: nextAppointment.notes || 'Dental Appointment' },
+            ]
+          : [{ icon: 'info', text: 'Book your next checkup' }],
+      },
+      {
+        icon: 'payments',
+        label: 'Outstanding Balance',
+        title: `$${outstandingBalance.toFixed(2)}`,
+        action: outstandingBalance > 0 ? 'Pay Now' : null,
+        details: outstandingBalance === 0 ? [{ icon: 'check_circle', text: 'All bills paid!' }] : null,
+      },
+      {
+        icon: 'history',
+        label: 'Last Visit',
+        title: lastVisit 
+          ? formatDate(lastVisit.appointment_date)
+          : 'No past visits',
+        details: lastVisit 
+          ? [{ icon: 'check_circle', text: lastVisit.notes || 'Dental Care' }]
+          : [{ icon: 'info', text: 'Welcome to our clinic!' }],
+        link: lastVisit ? 'View summary' : null,
+      },
+    ];
+  }, [nextAppointment, outstandingBalance, lastVisit]);
+
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+    const scheduled = appointments.filter(app => {
+      if (app.status !== 'Scheduled') return false;
+      const appDateTime = new Date(`${app.appointment_date}T${app.appointment_time}`);
+      return appDateTime >= now;
+    });
+    scheduled.sort((a, b) => new Date(`${a.appointment_date}T${a.appointment_time}`) - new Date(`${b.appointment_date}T${b.appointment_time}`));
+    
+    return scheduled.slice(0, 3).map(app => {
+      const date = new Date(app.appointment_date);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return {
+        month: months[date.getMonth()],
+        day: date.getDate().toString(),
+        treatment: app.notes || 'Routine Checkup',
+        dentist: app.Dentist ? `Dr. ${app.Dentist.first_name} ${app.Dentist.last_name}` : 'Dentist',
+        time: `${formatTime(app.appointment_time)} (${app.duration || 30} mins)`,
+      };
+    });
+  }, [appointments]);
+
+  const recentActivities = useMemo(() => {
+    // Show recent dental records
+    const sortedRecords = [...records];
+    sortedRecords.sort((a, b) => new Date(b.record_date) - new Date(a.record_date));
+    
+    return sortedRecords.slice(0, 3).map(rec => ({
+      icon: 'medical_information',
+      title: rec.condition || 'Dental Care Visit',
+      date: formatDate(rec.record_date),
+      description: rec.notes || 'Treatment completed successfully.',
+      tags: [
+        rec.Dentist ? `Dr. ${rec.Dentist.first_name}` : 'Dentist',
+        rec.tooth ? `Tooth ${rec.tooth}` : null
+      ].filter(Boolean),
+    }));
+  }, [records]);
+
+  if (loading) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-on-surface">
+        <span className="material-symbols-outlined text-primary text-[48px] animate-spin mb-4">
+          progress_activity
+        </span>
+        <p className="text-body-lg">Loading your portal...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-background min-h-screen flex flex-col justify-center items-center font-body-base text-error">
+        <span className="material-symbols-outlined text-[48px] mb-4">error</span>
+        <p className="text-body-lg font-bold">Error: {error}</p>
+        <button onClick={() => window.location.reload()} className="mt-4 bg-primary text-on-primary px-6 py-2 rounded-full font-label-bold">
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-surface text-on-surface font-body-base text-body-base antialiased min-h-screen flex flex-col">
@@ -109,13 +268,19 @@ function PatientPortal() {
               )}
 
               {card.action && (
-                <button className="w-full bg-primary text-on-primary font-label-bold py-3 rounded-full hover:bg-surface-tint transition-colors">
+                <button 
+                  onClick={() => navigate('/patient/billing')}
+                  className="w-full bg-primary text-on-primary font-label-bold py-3 rounded-full hover:bg-surface-tint transition-colors mt-2"
+                >
                   {card.action}
                 </button>
               )}
 
               {card.link && (
-                <button className="font-label-bold text-primary flex items-center gap-1 hover:underline">
+                <button 
+                  onClick={() => navigate('/patient/records')}
+                  className="font-label-bold text-primary flex items-center gap-1 hover:underline mt-2"
+                >
                   {card.link}
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
@@ -157,41 +322,40 @@ function PatientPortal() {
               </div>
 
               <div className="flex flex-col">
-                {upcomingAppointments.map((appointment) => (
-                  <div
-                    key={`${appointment.month}-${appointment.day}-${appointment.time}`}
-                    className="py-4 border-b border-surface-container-highest last:border-0 flex items-center justify-between hover:bg-surface-bright transition-colors rounded-lg px-2 -mx-2"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="bg-surface-container-high rounded-lg p-3 text-center min-w-[70px]">
-                        <div className="text-caption text-on-surface-variant uppercase">{appointment.month}</div>
-                        <div className="text-headline-md font-headline-md text-primary">{appointment.day}</div>
-                      </div>
-                      <div>
-                        <h4 className="font-label-bold text-on-surface mb-1">{appointment.treatment}</h4>
-                        <p className="text-body-base text-on-surface-variant mb-1">{appointment.dentist}</p>
-                        <div className="flex items-center gap-2 text-caption text-tertiary">
-                          <span className="material-symbols-outlined text-[16px]">schedule</span>
-                          {appointment.time}
+                {upcomingAppointments.length === 0 ? (
+                  <div className="text-on-surface-variant text-center py-6">No upcoming appointments.</div>
+                ) : (
+                  upcomingAppointments.map((appointment, idx) => (
+                    <div
+                      key={idx}
+                      className="py-4 border-b border-surface-container-highest last:border-0 flex items-center justify-between hover:bg-surface-bright transition-colors rounded-lg px-2 -mx-2"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="bg-surface-container-high rounded-lg p-3 text-center min-w-[70px]">
+                          <div className="text-caption text-on-surface-variant uppercase">{appointment.month}</div>
+                          <div className="text-headline-md font-headline-md text-primary">{appointment.day}</div>
+                        </div>
+                        <div>
+                          <h4 className="font-label-bold text-on-surface mb-1">{appointment.treatment}</h4>
+                          <p className="text-body-base text-on-surface-variant mb-1">{appointment.dentist}</p>
+                          <div className="flex items-center gap-2 text-caption text-tertiary">
+                            <span className="material-symbols-outlined text-[16px]">schedule</span>
+                            {appointment.time}
+                          </div>
                         </div>
                       </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => navigate('/patient/appointments')}
+                          aria-label="Manage Appointment"
+                          className="p-2 text-tertiary hover:bg-surface-container-high rounded-full transition-colors"
+                        >
+                          <span className="material-symbols-outlined">edit</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        aria-label="Edit Appointment"
-                        className="p-2 text-tertiary hover:bg-surface-container-high rounded-full transition-colors"
-                      >
-                        <span className="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        aria-label="Cancel Appointment"
-                        className="p-2 text-tertiary hover:bg-surface-container-high rounded-full transition-colors"
-                      >
-                        <span className="material-symbols-outlined">close</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </section>
 
@@ -207,40 +371,42 @@ function PatientPortal() {
               </div>
 
               <div className="flex flex-col gap-4">
-                {recentActivities.map((activity) => (
-                  <article
-                    key={`${activity.title}-${activity.date}`}
-                    className="bg-surface-bright border border-surface-container-highest rounded-lg p-4 flex items-start gap-4"
-                  >
-                    <div className="mt-1 w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">{activity.icon}</span>
-                    </div>
-                    <div className="flex-grow">
-                      <div className="flex justify-between items-start gap-4 mb-1">
-                        <h4 className="font-label-bold text-on-surface">{activity.title}</h4>
-                        <span className="text-caption text-on-surface-variant whitespace-nowrap">{activity.date}</span>
+                {recentActivities.length === 0 ? (
+                  <div className="text-on-surface-variant text-center py-6">No recent dental activities.</div>
+                ) : (
+                  recentActivities.map((activity, idx) => (
+                    <article
+                      key={idx}
+                      className="bg-surface-bright border border-surface-container-highest rounded-lg p-4 flex items-start gap-4"
+                    >
+                      <div className="mt-1 w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">{activity.icon}</span>
                       </div>
-                      <p className="text-body-base text-on-surface-variant mb-2">{activity.description}</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {activity.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="bg-surface-container-high text-on-surface px-2 py-1 rounded text-caption font-label-bold"
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                      <div className="flex-grow">
+                        <div className="flex justify-between items-start gap-4 mb-1">
+                          <h4 className="font-label-bold text-on-surface">{activity.title}</h4>
+                          <span className="text-caption text-on-surface-variant whitespace-nowrap">{activity.date}</span>
+                        </div>
+                        <p className="text-body-base text-on-surface-variant mb-2">{activity.description}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {activity.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="bg-surface-container-high text-on-surface px-2 py-1 rounded text-caption font-label-bold"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+                    </article>
+                  ))
+                )}
               </div>
             </section>
           </div>
         </div>
       </main>
-
-      
     </div>
   );
 }
