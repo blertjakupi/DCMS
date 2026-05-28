@@ -1,8 +1,13 @@
 const {
+  sequelize,
   DentalRecord,
   Patient,
   Dentist,
-  Appointment
+  Appointment,
+  Treatment,
+  Invoice,
+  InvoiceItem,
+  Payment
 } = require('../models');
 
 const checkDentistAccess = async (req, targetDentistId) => {
@@ -52,6 +57,85 @@ const getIncludeOptions = () => [
     attributes: ['appointment_id', 'appointment_date']
   }
 ];
+
+const recalculateInvoiceTotal = async (invoiceId, transaction) => {
+  const items = await InvoiceItem.findAll({ where: { invoice_id: invoiceId }, transaction });
+  const total = items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+  await Invoice.update({ total_amount: total }, { where: { invoice_id: invoiceId }, transaction });
+  return total;
+};
+
+const updateInvoiceStatus = async (invoiceId, transaction) => {
+  const invoice = await Invoice.findByPk(invoiceId, {
+    include: [{ model: Payment, attributes: ['amount'] }],
+    transaction
+  });
+
+  if (!invoice) return;
+
+  const paid = invoice.Payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const total = Number(invoice.total_amount || 0);
+  let status = 'Unpaid';
+
+  if (total > 0 && paid >= total) status = 'Paid';
+  else if (paid > 0) status = 'Partially Paid';
+
+  await invoice.update({ status }, { transaction });
+};
+
+const ensureInvoiceForAppointment = async (appointment, invoiceDate, transaction) => {
+  if (!appointment?.treatment_id) return null;
+
+  const treatment = await Treatment.findOne({
+    where: {
+      treatment_id: appointment.treatment_id,
+      is_deleted: false
+    },
+    transaction
+  });
+
+  if (!treatment) return null;
+
+  const [invoice] = await Invoice.findOrCreate({
+    where: { appointment_id: appointment.appointment_id },
+    defaults: {
+      patient_id: appointment.patient_id,
+      appointment_id: appointment.appointment_id,
+      invoice_date: invoiceDate,
+      total_amount: 0,
+      status: 'Unpaid'
+    },
+    transaction
+  });
+
+  const existingItem = await InvoiceItem.findOne({
+    where: {
+      invoice_id: invoice.invoice_id,
+      treatment_id: treatment.treatment_id
+    },
+    transaction
+  });
+
+  if (!existingItem) {
+    await InvoiceItem.create({
+      invoice_id: invoice.invoice_id,
+      treatment_id: treatment.treatment_id,
+      quantity: 1,
+      price: treatment.price
+    }, { transaction });
+  }
+
+  await recalculateInvoiceTotal(invoice.invoice_id, transaction);
+  await updateInvoiceStatus(invoice.invoice_id, transaction);
+
+  return Invoice.findByPk(invoice.invoice_id, {
+    include: [
+      { model: InvoiceItem, include: [{ model: Treatment, attributes: ['treatment_id', 'treatment_name', 'price'] }] },
+      { model: Payment, attributes: ['payment_id', 'amount', 'payment_date', 'payment_method'] }
+    ],
+    transaction
+  });
+};
 
 const dentalRecordController = {
   getAll: async (req, res) => {
@@ -204,10 +288,13 @@ const dentalRecordController = {
   },
 
   create: async (req, res) => {
+    const transaction = await sequelize.transaction();
+
     try {
       const { tooth, condition, notes, record_date, dentist_id, patient_id, appointment_id } = req.body;
 
       if (!patient_id || !dentist_id || !record_date) {
+        await transaction.rollback();
         return res.status(400).json({
           message: 'Fushat e detyrueshme mungojnë: patient_id, dentist_id, record_date.'
         });
@@ -215,23 +302,35 @@ const dentalRecordController = {
 
       const hasAccess = await checkDentistAccess(req, dentist_id);
       if (!hasAccess) {
+        await transaction.rollback();
         return res.status(403).json({ message: 'Nuk keni akses për të shtuar regjistër për këtë dentist.' });
       }
 
-      const patient = await Patient.findByPk(patient_id);
+      const patient = await Patient.findByPk(patient_id, { transaction });
       if (!patient || patient.is_deleted) {
+        await transaction.rollback();
         return res.status(404).json({ message: 'Pacienti nuk ekziston ose është fshirë.' });
       }
 
-      const dentist = await Dentist.findByPk(dentist_id);
+      const dentist = await Dentist.findByPk(dentist_id, { transaction });
       if (!dentist || dentist.is_deleted) {
+        await transaction.rollback();
         return res.status(404).json({ message: 'Dentisti nuk ekziston ose është fshirë.' });
       }
 
+      let appointment = null;
       if (appointment_id) {
-        const appointment = await Appointment.findByPk(appointment_id);
+        appointment = await Appointment.findByPk(appointment_id, { transaction });
         if (!appointment) {
+          await transaction.rollback();
           return res.status(404).json({ message: 'Termini nuk ekziston.' });
+        }
+        if (
+          appointment.patient_id !== parseInt(patient_id, 10) ||
+          appointment.dentist_id !== parseInt(dentist_id, 10)
+        ) {
+          await transaction.rollback();
+          return res.status(400).json({ message: 'Termini nuk perputhet me pacientin dhe dentistin.' });
         }
       }
 
@@ -243,22 +342,81 @@ const dentalRecordController = {
         dentist_id,
         patient_id,
         appointment_id: appointment_id || null
-      });
+      }, { transaction });
+
+      let invoice = null;
+      if (appointment) {
+        await appointment.update({ status: 'Completed' }, { transaction });
+        invoice = await ensureInvoiceForAppointment(appointment, record_date, transaction);
+      }
 
       const result = await DentalRecord.findOne({
         where: { record_id: newRecord.record_id },
-        include: getIncludeOptions()
+        include: getIncludeOptions(),
+        transaction
       });
+
+      await transaction.commit();
 
       return res.status(201).json({
         message: 'Regjistri dentar u krijua me sukses.',
-        data: result
+        data: result,
+        invoice
       });
     } catch (error) {
+      await transaction.rollback();
       console.error('CREATE DENTAL RECORD ERROR:', error);
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë krijimit të regjistrit dentar.'
       });
+    }
+  },
+
+  download: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const record = await DentalRecord.findOne({
+        where: { record_id: id },
+        include: getIncludeOptions()
+      });
+
+      if (!record) {
+        return res.status(404).json({ message: 'Regjistri dentar nuk u gjet.' });
+      }
+
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole === 'PATIENT') {
+        const hasAccess = await checkPatientAccess(req, record.patient_id);
+        if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses.' });
+      } else if (userRole === 'DENTIST') {
+        const hasAccess = await checkDentistAccess(req, record.dentist_id);
+        if (!hasAccess) return res.status(403).json({ message: 'Nuk keni akses.' });
+      }
+
+      const patientName = `${record.Patient?.first_name || ''} ${record.Patient?.last_name || ''}`.trim();
+      const dentistName = `${record.Dentist?.first_name || ''} ${record.Dentist?.last_name || ''}`.trim();
+      const content = [
+        'Dental Diagnosis Record',
+        '=======================',
+        `Record ID: ${record.record_id}`,
+        `Date: ${record.record_date}`,
+        `Patient: ${patientName || `Patient #${record.patient_id}`}`,
+        `Dentist: ${dentistName ? `Dr. ${dentistName}` : `Dentist #${record.dentist_id}`}`,
+        `Appointment ID: ${record.appointment_id || '-'}`,
+        `Tooth: ${record.tooth || '-'}`,
+        `Diagnosis/Condition: ${record.condition || '-'}`,
+        '',
+        'Notes:',
+        record.notes || '-'
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="diagnosis-record-${record.record_id}.txt"`);
+      return res.send(content);
+    } catch (error) {
+      console.error('DOWNLOAD DENTAL RECORD ERROR:', error);
+      return res.status(500).json({ message: 'Gabim i brendshem.' });
     }
   },
 

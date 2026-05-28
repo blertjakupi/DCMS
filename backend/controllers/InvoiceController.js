@@ -4,9 +4,9 @@ const { Op } = require('sequelize');
 async function recalcInvoiceTotal(invoiceId) {
   const items = await InvoiceItem.findAll({
     where: { invoice_id: invoiceId },
-    attributes: ['subtotal']
+    attributes: ['price', 'quantity']
   });
-  const total = items.reduce((sum, item) => sum + parseFloat(item.subtotal || 0), 0);
+  const total = items.reduce((sum, item) => sum + (parseFloat(item.price || 0) * parseInt(item.quantity || 1, 10)), 0);
   await Invoice.update({ total_amount: total }, { where: { invoice_id: invoiceId } });
   return total;
 }
@@ -57,7 +57,12 @@ exports.getAllInvoices = async (req, res) => {
       where,
       include: [
         { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
-        { model: Appointment, attributes: ['appointment_id', 'appointment_date'] }
+        { model: Appointment, attributes: ['appointment_id', 'appointment_date', 'treatment_id'] },
+        {
+          model: InvoiceItem,
+          include: [{ model: Treatment, attributes: ['treatment_id', 'treatment_name', 'price'] }]
+        },
+        { model: Payment, attributes: ['payment_id', 'amount', 'payment_date', 'payment_method', 'payment_status'] }
       ],
       limit: limitNum,
       offset: offset,
@@ -86,9 +91,9 @@ exports.getInvoiceById = async (req, res) => {
         { model: Appointment, attributes: ['appointment_id', 'appointment_date'] },
         {
           model: InvoiceItem,
-          include: [{ model: Treatment, attributes: ['treatment_id', 'name', 'price'] }]
+          include: [{ model: Treatment, attributes: ['treatment_id', 'treatment_name', 'price'] }]
         },
-        { model: Payment, attributes: ['payment_id', 'amount', 'payment_date', 'method'] }
+        { model: Payment, attributes: ['payment_id', 'amount', 'payment_date', 'payment_method', 'payment_status'] }
       ]
     });
 
@@ -116,22 +121,33 @@ exports.getInvoiceById = async (req, res) => {
 
 
 exports.createInvoice = async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     const { patient_id, appointment_id, invoice_date } = req.body;
 
 
-    const patient = await Patient.findByPk(patient_id);
+    const patient = await Patient.findByPk(patient_id, { transaction });
     if (!patient) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Patient not found' });
     }
     
-    const appointment = await Appointment.findByPk(appointment_id);
+    const appointment = await Appointment.findByPk(appointment_id, { transaction });
     if (!appointment) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Appointment not found' });
     }
     if (appointment.patient_id !== parseInt(patient_id, 10)) {
-    return res.status(400).json({ message: 'Appointment does not belong to this patient' });
-}
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Appointment does not belong to this patient' });
+    }
+
+    const existingInvoice = await Invoice.findOne({ where: { appointment_id }, transaction });
+    if (existingInvoice) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Invoice already exists for this appointment' });
+    }
 
     const newInvoice = await Invoice.create({
       patient_id,
@@ -139,10 +155,35 @@ exports.createInvoice = async (req, res) => {
       invoice_date,
       total_amount: 0.00,
       status: 'Unpaid'
+    }, { transaction });
+
+    if (appointment.treatment_id) {
+      const treatment = await Treatment.findByPk(appointment.treatment_id, { transaction });
+      if (treatment) {
+        await InvoiceItem.create({
+          invoice_id: newInvoice.invoice_id,
+          treatment_id: treatment.treatment_id,
+          quantity: 1,
+          price: treatment.price
+        }, { transaction });
+
+        const total = parseFloat(treatment.price || 0);
+        await newInvoice.update({ total_amount: total, status: total > 0 ? 'Unpaid' : 'Paid' }, { transaction });
+      }
+    }
+
+    await transaction.commit();
+    const invoice = await Invoice.findByPk(newInvoice.invoice_id, {
+      include: [
+        { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
+        { model: Appointment, attributes: ['appointment_id', 'appointment_date', 'treatment_id'] },
+        { model: InvoiceItem, include: [{ model: Treatment, attributes: ['treatment_id', 'treatment_name', 'price'] }] }
+      ]
     });
 
-    res.status(201).json(newInvoice);
+    res.status(201).json(invoice);
   } catch (error) {
+    await transaction.rollback();
     console.error(error);
     res.status(500).json({ message: 'Server error creating invoice' });
   }

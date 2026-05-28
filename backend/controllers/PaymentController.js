@@ -1,4 +1,4 @@
-const { sequelize, Payment, Invoice } = require('../models');
+const { sequelize, Payment, Invoice, Patient } = require('../models');
 const { Op } = require('sequelize');
 
 
@@ -112,6 +112,24 @@ exports.createPayment = async (req, res) => {
     if (!invoice) {
       await t.rollback();
       return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+    if (userRole === 'PATIENT') {
+      const ownPatient = await Patient.findOne({
+        where: { user_id: req.user.user_id, is_deleted: false },
+        transaction: t
+      });
+
+      if (!ownPatient || ownPatient.patient_id !== invoice.patient_id) {
+        await t.rollback();
+        return res.status(403).json({ message: 'Nuk keni akses per kete fature.' });
+      }
+
+      if (payment_method === 'Cash') {
+        await t.rollback();
+        return res.status(400).json({ message: 'Pagesa cash regjistrohet vetem nga recepsioni.' });
+      }
     }
     if (amount <= 0) {
     await t.rollback();

@@ -15,6 +15,30 @@ const InventoryItem = sequelize.define('InventoryItem', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  category: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  supplier_name: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  batch_lot_number: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  purchase_price: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true
+  },
+  storage_location: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
+  barcode: {
+    type: DataTypes.STRING(100),
+    allowNull: true
+  },
   quantity_in_stock: {
     type: DataTypes.INTEGER,
     allowNull: false,

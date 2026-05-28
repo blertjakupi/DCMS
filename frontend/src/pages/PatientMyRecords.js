@@ -36,6 +36,33 @@ function PatientMyRecords() {
   const [activeType, setActiveType] = useState('All');
   const [search, setSearch] = useState('');
 
+  const downloadRecord = async (recordId) => {
+    try {
+      const response = await fetch(`/api/dental-records/${recordId}/download`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `diagnosis-record-${recordId}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   useEffect(() => {
     const initPage = async () => {
       setLoading(true);
@@ -221,6 +248,13 @@ function PatientMyRecords() {
                       <span className="material-symbols-outlined text-[14px]">{status.icon}</span>
                       {record.status}
                     </span>
+                    <button
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                      onClick={() => downloadRecord(record.id)}
+                      title="Download diagnosis"
+                    >
+                      <span className="material-symbols-outlined">download</span>
+                    </button>
                   </div>
                 </article>
               );

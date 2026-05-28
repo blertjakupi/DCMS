@@ -4,11 +4,27 @@ import AdminSidebar from '../components/AdminSidebar';
 const emptyForm = {
   item_name: '',
   description: '',
-  quantity_in_stock: '',
+  category: '',
   unit: '',
   minimum_stock: '',
   expiry_date: '',
+  supplier_name: '',
+  batch_lot_number: '',
+  purchase_price: '',
+  storage_location: '',
+  barcode: '',
 };
+
+const emptyTransactionForm = {
+  item_id: '',
+  transaction_type: 'IN',
+  quantity: '',
+  transaction_date: new Date().toISOString().slice(0, 10),
+  notes: '',
+};
+
+const categories = ['Consumable', 'Instrument', 'Medication', 'Equipment'];
+const units = ['Box', 'Piece', 'Bottle', 'Pack', 'Tube', 'Vial', 'Syringe'];
 
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -59,7 +75,9 @@ function InventoryManagement() {
   const [search, setSearch] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [transactionOpen, setTransactionOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [transactionForm, setTransactionForm] = useState(emptyTransactionForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -141,6 +159,20 @@ function InventoryManagement() {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const updateTransactionForm = (field, value) => {
+    setTransactionForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const openTransactionModal = (item, type = 'IN') => {
+    setTransactionForm({
+      ...emptyTransactionForm,
+      item_id: item.item_id,
+      transaction_type: type,
+      notes: `${type} transaction for ${item.item_name}`,
+    });
+    setTransactionOpen(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -152,8 +184,8 @@ function InventoryManagement() {
         headers: authHeaders(),
         body: JSON.stringify({
           ...form,
-          quantity_in_stock: Number(form.quantity_in_stock),
           minimum_stock: form.minimum_stock === '' ? 0 : Number(form.minimum_stock),
+          purchase_price: form.purchase_price === '' ? null : Number(form.purchase_price),
           expiry_date: form.expiry_date || null,
           status: 'Active',
         }),
@@ -164,6 +196,34 @@ function InventoryManagement() {
 
       setForm(emptyForm);
       setQuickAddOpen(false);
+      await loadData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTransactionSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/inventory-transactions', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          ...transactionForm,
+          quantity: Number(transactionForm.quantity),
+        }),
+      });
+      const json = await response.json();
+
+      if (!response.ok) throw new Error(json.message || 'Inventory transaction could not be created.');
+
+      setTransactionForm(emptyTransactionForm);
+      setTransactionOpen(false);
       await loadData();
     } catch (err) {
       setError(err.message);
@@ -378,7 +438,11 @@ function InventoryManagement() {
                         </td>
                         <td className="px-gutter py-md text-right">
                           <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Restock">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Inventory Transaction"
+                              onClick={() => openTransactionModal(item, 'IN')}
+                            >
                               <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
                             </button>
                             <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit">
@@ -444,15 +508,42 @@ function InventoryManagement() {
 
             <div className="grid grid-cols-2 gap-md">
               <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Category</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  value={form.category}
+                  onChange={(event) => updateForm('category', event.target.value)}
+                >
+                  <option value="">Select category</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Unit</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  value={form.unit}
+                  onChange={(event) => updateForm('unit', event.target.value)}
+                  required
+                >
+                  <option value="">Select unit</option>
+                  {units.map((unit) => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-md">
+              <div className="space-y-unit">
                 <label className="font-label-bold text-on-surface-variant text-caption">Current Qty</label>
                 <input
-                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
-                  min="0"
-                  placeholder="0"
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-high border-outline-variant border text-body-base text-on-surface-variant"
                   type="number"
-                  value={form.quantity_in_stock}
-                  onChange={(event) => updateForm('quantity_in_stock', event.target.value)}
-                  required
+                  value="0"
+                  readOnly
                 />
               </div>
               <div className="space-y-unit">
@@ -470,14 +561,37 @@ function InventoryManagement() {
 
             <div className="grid grid-cols-2 gap-md">
               <div className="space-y-unit">
-                <label className="font-label-bold text-on-surface-variant text-caption">Unit</label>
+                <label className="font-label-bold text-on-surface-variant text-caption">Supplier Name</label>
                 <input
                   className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
-                  placeholder="Boxes, vials, pieces..."
+                  placeholder="Supplier..."
                   type="text"
-                  value={form.unit}
-                  onChange={(event) => updateForm('unit', event.target.value)}
-                  required
+                  value={form.supplier_name}
+                  onChange={(event) => updateForm('supplier_name', event.target.value)}
+                />
+              </div>
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Batch / Lot</label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  placeholder="LOT-2026..."
+                  type="text"
+                  value={form.batch_lot_number}
+                  onChange={(event) => updateForm('batch_lot_number', event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-md">
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Purchase Price</label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  value={form.purchase_price}
+                  onChange={(event) => updateForm('purchase_price', event.target.value)}
                 />
               </div>
               <div className="space-y-unit">
@@ -487,6 +601,29 @@ function InventoryManagement() {
                   type="date"
                   value={form.expiry_date}
                   onChange={(event) => updateForm('expiry_date', event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-md">
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Storage Location</label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  placeholder="Cabinet A..."
+                  type="text"
+                  value={form.storage_location}
+                  onChange={(event) => updateForm('storage_location', event.target.value)}
+                />
+              </div>
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Barcode / QR Code</label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  placeholder="Scan or enter code..."
+                  type="text"
+                  value={form.barcode}
+                  onChange={(event) => updateForm('barcode', event.target.value)}
                 />
               </div>
             </div>
@@ -518,6 +655,106 @@ function InventoryManagement() {
             </button>
             <button className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-label-bold hover:bg-on-primary-fixed-variant transition-all shadow-md active:scale-95 disabled:opacity-60" type="submit" disabled={saving}>
               {saving ? 'Adding...' : 'Add Item'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div
+        className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
+          transactionOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setTransactionOpen(false)}
+      >
+        <form
+          className={`fixed right-0 top-0 h-screen w-full max-w-md bg-surface-container-lowest shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+            transactionOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+          onClick={(event) => event.stopPropagation()}
+          onSubmit={handleTransactionSubmit}
+        >
+          <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+            <h3 className="text-headline-md font-headline-md text-primary">Inventory Transaction</h3>
+            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setTransactionOpen(false)}>
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-gutter space-y-md">
+            <div className="space-y-unit">
+              <label className="font-label-bold text-on-surface-variant text-caption">Item</label>
+              <select
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                value={transactionForm.item_id}
+                onChange={(event) => updateTransactionForm('item_id', event.target.value)}
+                required
+              >
+                <option value="">Select item</option>
+                {items.map((item) => (
+                  <option key={item.item_id} value={item.item_id}>
+                    {item.item_name} ({item.quantity_in_stock} {item.unit})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-md">
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Type</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  value={transactionForm.transaction_type}
+                  onChange={(event) => updateTransactionForm('transaction_type', event.target.value)}
+                  required
+                >
+                  <option value="IN">IN</option>
+                  <option value="OUT">OUT</option>
+                  <option value="ADJUSTMENT">ADJUSTMENT</option>
+                </select>
+              </div>
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">
+                  {transactionForm.transaction_type === 'ADJUSTMENT' ? 'New Stock Qty' : 'Quantity'}
+                </label>
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  min={transactionForm.transaction_type === 'ADJUSTMENT' ? '0' : '1'}
+                  type="number"
+                  value={transactionForm.quantity}
+                  onChange={(event) => updateTransactionForm('quantity', event.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-unit">
+              <label className="font-label-bold text-on-surface-variant text-caption">Transaction Date</label>
+              <input
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                type="date"
+                value={transactionForm.transaction_date}
+                onChange={(event) => updateTransactionForm('transaction_date', event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-unit">
+              <label className="font-label-bold text-on-surface-variant text-caption">Notes</label>
+              <textarea
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base resize-none"
+                rows="4"
+                value={transactionForm.notes}
+                onChange={(event) => updateTransactionForm('notes', event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="p-gutter border-t border-outline-variant/30 flex gap-md">
+            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => setTransactionOpen(false)}>
+              Cancel
+            </button>
+            <button className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-label-bold hover:bg-on-primary-fixed-variant transition-all shadow-md active:scale-95 disabled:opacity-60" type="submit" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Transaction'}
             </button>
           </div>
         </form>

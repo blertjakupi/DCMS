@@ -2,18 +2,62 @@ const { Op } = require('sequelize');
 const {
   Appointment,
   Patient,
-  Dentist
+  Dentist,
+  Treatment
 } = require('../models');
 const appointmentService = require('../services/appointmentService');
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
+
+const timeToMinutes = (time) => {
+  const [hours, minutes] = String(time || '00:00').split(':').map(Number);
+  return (hours * 60) + minutes;
+};
+
+const appointmentsOverlap = (firstStart, firstDuration, secondStart, secondDuration) => {
+  const firstStartMinutes = timeToMinutes(firstStart);
+  const firstEndMinutes = firstStartMinutes + Number(firstDuration || 30);
+  const secondStartMinutes = timeToMinutes(secondStart);
+  const secondEndMinutes = secondStartMinutes + Number(secondDuration || 30);
+
+  return firstStartMinutes < secondEndMinutes && secondStartMinutes < firstEndMinutes;
+};
+
+const findDentistTimeConflict = async ({
+  dentistId,
+  appointmentDate,
+  appointmentTime,
+  duration,
+  excludeAppointmentId
+}) => {
+  const where = {
+    dentist_id: dentistId,
+    appointment_date: appointmentDate,
+    status: { [Op.ne]: 'Cancelled' }
+  };
+
+  if (excludeAppointmentId) {
+    where.appointment_id = { [Op.ne]: excludeAppointmentId };
+  }
+
+  const sameDayAppointments = await Appointment.findAll({ where });
+
+  return sameDayAppointments.find((appointment) =>
+    appointmentsOverlap(
+      appointmentTime,
+      duration,
+      appointment.appointment_time,
+      appointment.duration
+    )
+  );
+};
 
 const appointmentController = {
   getAll: async (req, res) => {
     try {
       const appointments = await Appointment.findAll({
         where: {
-          status: { [Op.ne]: 'Cancelled' }
+          status: { [Op.ne]: null }
         },
         include: [
           {
@@ -22,7 +66,11 @@ const appointmentController = {
           },
           {
             model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
+            attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+          },
+          {
+            model: Treatment,
+            attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
           }
         ],
         order: [['appointment_date', 'DESC'], ['appointment_time', 'DESC']]
@@ -67,7 +115,11 @@ const appointmentController = {
           },
           {
             model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
+            attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+          },
+          {
+            model: Treatment,
+            attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
           }
         ]
       });
@@ -76,6 +128,37 @@ const appointmentController = {
         return res.status(404).json({
           message: 'Termini nuk u gjet.'
         });
+      }
+
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole === 'DENTIST') {
+        const ownDentist = await Dentist.findOne({
+          where: {
+            user_id: req.user.user_id,
+            is_deleted: false
+          }
+        });
+
+        if (!ownDentist || ownDentist.dentist_id !== appointment.dentist_id) {
+          return res.status(403).json({
+            message: 'Nuk keni akses per te pare kete termin.'
+          });
+        }
+      }
+
+      if (userRole === 'PATIENT') {
+        const ownPatient = await Patient.findOne({
+          where: {
+            user_id: req.user.user_id,
+            is_deleted: false
+          }
+        });
+
+        if (!ownPatient || ownPatient.patient_id !== appointment.patient_id) {
+          return res.status(403).json({
+            message: 'Nuk keni akses per te pare kete termin.'
+          });
+        }
       }
 
       return res.status(200).json({
@@ -127,7 +210,7 @@ const appointmentController = {
       const appointments = await Appointment.findAll({
         where: {
           patient_id: patientId,
-          status: { [Op.ne]: 'Cancelled' }
+          status: { [Op.ne]: null }
         },
         include: [
           {
@@ -136,7 +219,11 @@ const appointmentController = {
           },
           {
             model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
+            attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+          },
+          {
+            model: Treatment,
+            attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
           }
         ],
         order: [['appointment_date', 'DESC'], ['appointment_time', 'DESC']]
@@ -191,7 +278,7 @@ const appointmentController = {
       const appointments = await Appointment.findAll({
         where: {
           dentist_id: dentistId,
-          status: { [Op.ne]: 'Cancelled' }
+          status: { [Op.ne]: null }
         },
         include: [
           {
@@ -200,7 +287,11 @@ const appointmentController = {
           },
           {
             model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
+            attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+          },
+          {
+            model: Treatment,
+            attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
           }
         ],
         order: [['appointment_date', 'DESC'], ['appointment_time', 'DESC']]
@@ -257,6 +348,29 @@ const appointmentController = {
           });
         }
 
+        const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+        if (userRole === 'PATIENT') {
+          const ownPatient = await Patient.findOne({
+            where: {
+              user_id: req.user.user_id,
+              is_deleted: false,
+              status: 'Active'
+            }
+          });
+
+          if (!ownPatient || ownPatient.patient_id !== parseInt(patient_id, 10)) {
+            return res.status(403).json({
+              message: 'Nuk keni akses per te krijuar termin per kete pacient.'
+            });
+          }
+
+          if (status && status !== 'Scheduled') {
+            return res.status(400).json({
+              message: 'Pacienti mund te krijoje vetem termine me status Scheduled.'
+            });
+          }
+        }
+
         
         const dentist = await Dentist.findOne({
           where: {
@@ -272,7 +386,6 @@ const appointmentController = {
         }
 
         
-        const Treatment = require('../models').Treatment;
         const treatment = await Treatment.findOne({
           where: {
             treatment_id,
@@ -288,13 +401,11 @@ const appointmentController = {
         const duration = treatment.average_duration || 30; 
 
         
-        const conflictingAppointment = await Appointment.findOne({
-          where: {
-            dentist_id,
-            appointment_date,
-            appointment_time,
-            status: { [Op.ne]: 'Cancelled' }
-          }
+        const conflictingAppointment = await findDentistTimeConflict({
+          dentistId: dentist_id,
+          appointmentDate: appointment_date,
+          appointmentTime: appointment_time,
+          duration
         });
         if (conflictingAppointment) {
           return res.status(409).json({
@@ -324,7 +435,11 @@ const appointmentController = {
             },
             {
               model: Dentist,
-              attributes: ['dentist_id', 'first_name', 'last_name']
+              attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+            },
+            {
+              model: Treatment,
+              attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
             }
           ]
         });
@@ -362,6 +477,67 @@ const appointmentController = {
         return res.status(404).json({
           message: 'Termini nuk u gjet.'
         });
+      }
+
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole === 'PATIENT') {
+        const ownPatient = await Patient.findOne({
+          where: {
+            user_id: req.user.user_id,
+            is_deleted: false
+          }
+        });
+
+        if (!ownPatient || ownPatient.patient_id !== appointment.patient_id) {
+          return res.status(403).json({
+            message: 'Nuk keni akses per te ndryshuar kete termin.'
+          });
+        }
+
+        const onlyCancelling =
+          status === 'Cancelled' &&
+          patient_id === undefined &&
+          dentist_id === undefined &&
+          appointment_date === undefined &&
+          appointment_time === undefined &&
+          duration === undefined &&
+          notes === undefined;
+
+        if (!onlyCancelling) {
+          return res.status(403).json({
+            message: 'Pacienti mund te anuloje vetem terminin e vet.'
+          });
+        }
+      }
+
+      if (userRole === 'DENTIST') {
+        const ownDentist = await Dentist.findOne({
+          where: {
+            user_id: req.user.user_id,
+            is_deleted: false
+          }
+        });
+
+        if (!ownDentist || ownDentist.dentist_id !== appointment.dentist_id) {
+          return res.status(403).json({
+            message: 'Nuk keni akses per te ndryshuar kete termin.'
+          });
+        }
+
+        const onlyStatusUpdate =
+          status !== undefined &&
+          patient_id === undefined &&
+          dentist_id === undefined &&
+          appointment_date === undefined &&
+          appointment_time === undefined &&
+          duration === undefined &&
+          notes === undefined;
+
+        if (!onlyStatusUpdate) {
+          return res.status(403).json({
+            message: 'Dentisti mund te ndryshoje vetem statusin e termineve te veta.'
+          });
+        }
       }
 
       if (status && !allowedStatuses.includes(status)) {
@@ -412,15 +588,13 @@ const appointmentController = {
       const effectiveDate = appointment_date || appointment.appointment_date;
       const effectiveTime = appointment_time || appointment.appointment_time;
 
-      if (dentist_id || appointment_date || appointment_time) {
-        const conflictingAppointment = await Appointment.findOne({
-          where: {
-            dentist_id: effectiveDentistId,
-            appointment_date: effectiveDate,
-            appointment_time: effectiveTime,
-            appointment_id: { [Op.ne]: id },
-            status: { [Op.ne]: 'Cancelled' }
-          }
+      if (dentist_id || appointment_date || appointment_time || duration) {
+        const conflictingAppointment = await findDentistTimeConflict({
+          dentistId: effectiveDentistId,
+          appointmentDate: effectiveDate,
+          appointmentTime: effectiveTime,
+          duration: duration || appointment.duration,
+          excludeAppointmentId: id
         });
 
         if (conflictingAppointment) {
@@ -450,7 +624,11 @@ const appointmentController = {
           },
           {
             model: Dentist,
-            attributes: ['dentist_id', 'first_name', 'last_name']
+            attributes: ['dentist_id', 'first_name', 'last_name', 'specialization']
+          },
+          {
+            model: Treatment,
+            attributes: ['treatment_id', 'treatment_name', 'average_duration', 'price']
           }
         ]
       });
@@ -482,6 +660,22 @@ const appointmentController = {
         return res.status(404).json({
           message: 'Termini nuk u gjet.'
         });
+      }
+
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      if (userRole === 'PATIENT') {
+        const ownPatient = await Patient.findOne({
+          where: {
+            user_id: req.user.user_id,
+            is_deleted: false
+          }
+        });
+
+        if (!ownPatient || ownPatient.patient_id !== appointment.patient_id) {
+          return res.status(403).json({
+            message: 'Nuk keni akses per te anuluar kete termin.'
+          });
+        }
       }
 
       await appointment.update({ status: 'Cancelled' });

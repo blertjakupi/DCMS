@@ -10,6 +10,7 @@ router.get('/appointment/:appointmentId', roleMiddleware('ADMIN', 'RECEPTIONIST'
 router.get('/patient/:patientId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), dentalRecordController.getByPatient);
 router.get('/dentist/:dentistId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), dentalRecordController.getByDentist);
 router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), dentalRecordController.getAll);
+router.get('/:id/download', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), dentalRecordController.download);
 router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), dentalRecordController.getById);
 
 router.post('/', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), dentalRecordController.create);

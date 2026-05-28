@@ -1,16 +1,30 @@
 const {
   InventoryTransaction,
-  InventoryItem
+  InventoryItem,
+  sequelize
 } = require('../models');
 
-const VALID_TYPES = ['IN', 'OUT'];
+const VALID_TYPES = ['IN', 'OUT', 'ADJUSTMENT'];
+
+const getStockStatus = (quantity, minimumStock) => {
+  if (Number(quantity || 0) <= 0) return 'Out of Stock';
+  if (Number(quantity || 0) <= Number(minimumStock || 0)) return 'Low Stock';
+  return 'Active';
+};
 
 const getIncludeOptions = () => [
   {
     model: InventoryItem,
-    attributes: ['item_id', 'item_name', 'unit', 'quantity_in_stock']
+    attributes: ['item_id', 'item_name', 'unit', 'quantity_in_stock', 'minimum_stock', 'status']
   }
 ];
+
+const updateItemStock = async (item, quantity, transaction) => {
+  await item.update({
+    quantity_in_stock: quantity,
+    status: getStockStatus(quantity, item.minimum_stock)
+  }, { transaction });
+};
 
 const inventoryTransactionController = {
   getAll: async (req, res) => {
@@ -21,14 +35,12 @@ const inventoryTransactionController = {
       });
 
       return res.status(200).json({
-        message: 'Transaksionet e inventarit u morën me sukses.',
+        message: 'Transaksionet e inventarit u moren me sukses.',
         data: transactions
       });
     } catch (error) {
       console.error('GET ALL INVENTORY TRANSACTIONS ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm gjatë marrjes së transaksioneve të inventarit.'
-      });
+      return res.status(500).json({ message: 'Gabim i brendshem.' });
     }
   },
 
@@ -51,9 +63,7 @@ const inventoryTransactionController = {
       });
     } catch (error) {
       console.error('GET INVENTORY TRANSACTION BY ID ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm gjatë marrjes së transaksionit.'
-      });
+      return res.status(500).json({ message: 'Gabim i brendshem.' });
     }
   },
 
@@ -75,83 +85,93 @@ const inventoryTransactionController = {
       });
 
       return res.status(200).json({
-        message: 'Transaksionet u morën me sukses.',
+        message: 'Transaksionet u moren me sukses.',
         data: transactions
       });
     } catch (error) {
       console.error('GET BY ITEM ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm.'
-      });
+      return res.status(500).json({ message: 'Gabim i brendshem.' });
     }
   },
 
   create: async (req, res) => {
+    const dbTransaction = await sequelize.transaction();
+
     try {
       const { transaction_type, quantity, transaction_date, notes, item_id } = req.body;
+      const parsedQuantity = Number(quantity);
 
-      if (!transaction_type || !quantity || !transaction_date || !item_id) {
+      if (!transaction_type || quantity === undefined || quantity === null || !transaction_date || !item_id) {
+        await dbTransaction.rollback();
         return res.status(400).json({
-          message: 'Fushat e detyrueshme mungojnë: transaction_type, quantity, transaction_date, item_id.'
+          message: 'Fushat e detyrueshme mungojne: transaction_type, quantity, transaction_date, item_id.'
         });
       }
 
       if (!VALID_TYPES.includes(transaction_type)) {
+        await dbTransaction.rollback();
         return res.status(400).json({
-          message: `Lloji i transaksionit duhet të jetë një nga: ${VALID_TYPES.join(', ')}.`
+          message: `Lloji i transaksionit duhet te jete nje nga: ${VALID_TYPES.join(', ')}.`
         });
       }
 
-      if (!Number.isInteger(quantity) || quantity <= 0) {
+      if (!Number.isInteger(parsedQuantity) || parsedQuantity < 0 || (transaction_type !== 'ADJUSTMENT' && parsedQuantity === 0)) {
+        await dbTransaction.rollback();
         return res.status(400).json({
-          message: 'Sasia duhet të jetë një numër i plotë pozitiv më i madh se 0.'
+          message: 'Sasia duhet te jete numer i plote pozitiv. Adjustment mund te jete edhe 0.'
         });
       }
 
       const item = await InventoryItem.findOne({
-        where: { item_id, is_deleted: false }
+        where: { item_id, is_deleted: false },
+        transaction: dbTransaction
       });
       if (!item) {
-        return res.status(404).json({ message: 'Artikulli i inventarit nuk ekziston ose është fshirë.' });
+        await dbTransaction.rollback();
+        return res.status(404).json({ message: 'Artikulli i inventarit nuk ekziston.' });
       }
 
-      if (transaction_type === 'OUT') {
-        if (item.quantity_in_stock - quantity < 0) {
+      let newStock;
+      if (transaction_type === 'IN') {
+        newStock = item.quantity_in_stock + parsedQuantity;
+      } else if (transaction_type === 'OUT') {
+        newStock = item.quantity_in_stock - parsedQuantity;
+        if (newStock < 0) {
+          await dbTransaction.rollback();
           return res.status(400).json({
-            message: `Stoku i pamjaftueshëm. Stoku aktual: ${item.quantity_in_stock}, sasia e kërkuar: ${quantity}.`
+            message: `Stoku i pamjaftueshem. Stoku aktual: ${item.quantity_in_stock}, sasia e kerkuar: ${parsedQuantity}.`
           });
         }
+      } else {
+        newStock = parsedQuantity;
       }
 
       const newTransaction = await InventoryTransaction.create({
         transaction_type,
-        quantity,
+        quantity: parsedQuantity,
         transaction_date,
         notes: notes || null,
         item_id
-      });
+      }, { transaction: dbTransaction });
 
-      // Update stock
-      if (transaction_type === 'IN') {
-        await item.update({ quantity_in_stock: item.quantity_in_stock + quantity });
-      } else {
-        await item.update({ quantity_in_stock: item.quantity_in_stock - quantity });
-      }
+      await updateItemStock(item, newStock, dbTransaction);
 
       const result = await InventoryTransaction.findOne({
         where: { transaction_id: newTransaction.transaction_id },
-        include: getIncludeOptions()
+        include: getIncludeOptions(),
+        transaction: dbTransaction
       });
+
+      await dbTransaction.commit();
 
       return res.status(201).json({
         message: 'Transaksioni u krijua me sukses.',
         data: result
       });
     } catch (error) {
+      await dbTransaction.rollback();
       console.error('CREATE INVENTORY TRANSACTION ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm gjatë krijimit të transaksionit.'
-      });
+      return res.status(500).json({ message: 'Gabim i brendshem gjate krijimit te transaksionit.' });
     }
   },
 
@@ -177,56 +197,19 @@ const inventoryTransactionController = {
       });
 
       return res.status(200).json({
-        message: 'Transaksioni u përditësua me sukses.',
+        message: 'Transaksioni u perditesua me sukses.',
         data: result
       });
     } catch (error) {
       console.error('UPDATE INVENTORY TRANSACTION ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm.'
-      });
+      return res.status(500).json({ message: 'Gabim i brendshem.' });
     }
   },
 
   delete: async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const transaction = await InventoryTransaction.findByPk(id);
-      if (!transaction) {
-        return res.status(404).json({ message: 'Transaksioni nuk u gjet.' });
-      }
-
-      const item = await InventoryItem.findOne({
-        where: { item_id: transaction.item_id, is_deleted: false }
-      });
-
-      if (item) {
-        // Reverse the stock effect
-        if (transaction.transaction_type === 'IN') {
-          const newStock = item.quantity_in_stock - transaction.quantity;
-          if (newStock < 0) {
-            return res.status(400).json({
-              message: `Nuk mund të fshihet transaksioni. Kthimi i stokut do të rezultonte në vlerë negative (${newStock}).`
-            });
-          }
-          await item.update({ quantity_in_stock: newStock });
-        } else if (transaction.transaction_type === 'OUT') {
-          await item.update({ quantity_in_stock: item.quantity_in_stock + transaction.quantity });
-        }
-      }
-
-      await transaction.destroy();
-
-      return res.status(200).json({
-        message: 'Transaksioni u fshi me sukses.'
-      });
-    } catch (error) {
-      console.error('DELETE INVENTORY TRANSACTION ERROR:', error);
-      return res.status(500).json({
-        message: 'Gabim i brendshëm.'
-      });
-    }
+    return res.status(400).json({
+      message: 'Transaksionet e inventarit nuk fshihen. Krijo nje ADJUSTMENT per korrigjim stoku.'
+    });
   }
 };
 

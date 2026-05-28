@@ -1,6 +1,15 @@
 const { Op } = require('sequelize');
 const { InventoryItem, sequelize } = require('../models');
 
+const VALID_UNITS = ['Box', 'Piece', 'Bottle', 'Pack', 'Tube', 'Vial', 'Syringe'];
+const VALID_CATEGORIES = ['Consumable', 'Instrument', 'Medication', 'Equipment'];
+
+const getStockStatus = (quantity, minimumStock) => {
+  if (Number(quantity || 0) <= 0) return 'Out of Stock';
+  if (Number(quantity || 0) <= Number(minimumStock || 0)) return 'Low Stock';
+  return 'Active';
+};
+
 const inventoryItemController = {
   getAll: async (req, res) => {
     try {
@@ -73,17 +82,35 @@ const inventoryItemController = {
 
   create: async (req, res) => {
     try {
-      const { item_name, description, quantity_in_stock, unit, minimum_stock, expiry_date, status } = req.body;
+      const {
+        item_name,
+        description,
+        unit,
+        minimum_stock,
+        expiry_date,
+        category,
+        supplier_name,
+        batch_lot_number,
+        purchase_price,
+        storage_location,
+        barcode
+      } = req.body;
 
-      if (!item_name || !unit || quantity_in_stock === undefined || quantity_in_stock === null) {
+      if (!item_name || !unit) {
         return res.status(400).json({
-          message: 'Fushat e detyrueshme mungojnë: item_name, unit, quantity_in_stock.'
+          message: 'Fushat e detyrueshme mungojne: item_name, unit.'
         });
       }
 
-      if (quantity_in_stock < 0) {
+      if (!VALID_UNITS.includes(unit)) {
         return res.status(400).json({
-          message: 'Sasia në stok nuk mund të jetë negative.'
+          message: `Unit duhet te jete nje nga: ${VALID_UNITS.join(', ')}.`
+        });
+      }
+
+      if (category && !VALID_CATEGORIES.includes(category)) {
+        return res.status(400).json({
+          message: `Category duhet te jete nje nga: ${VALID_CATEGORIES.join(', ')}.`
         });
       }
 
@@ -105,11 +132,17 @@ const inventoryItemController = {
       const newItem = await InventoryItem.create({
         item_name,
         description: description || null,
-        quantity_in_stock,
+        category: category || null,
+        supplier_name: supplier_name || null,
+        batch_lot_number: batch_lot_number || null,
+        purchase_price: purchase_price === '' || purchase_price === undefined ? null : purchase_price,
+        storage_location: storage_location || null,
+        barcode: barcode || null,
+        quantity_in_stock: 0,
         unit,
         minimum_stock: minimum_stock || 0,
         expiry_date: expiry_date || null,
-        status: status || 'Active',
+        status: getStockStatus(0, minimum_stock || 0),
         is_deleted: false
       });
 
@@ -128,19 +161,26 @@ const inventoryItemController = {
   update: async (req, res) => {
     try {
       const { id } = req.params;
-      const { item_name, description, quantity_in_stock, unit, minimum_stock, expiry_date, status } = req.body;
+      const {
+        item_name,
+        description,
+        unit,
+        minimum_stock,
+        expiry_date,
+        status,
+        category,
+        supplier_name,
+        batch_lot_number,
+        purchase_price,
+        storage_location,
+        barcode
+      } = req.body;
 
       const item = await InventoryItem.findOne({
         where: { item_id: id, is_deleted: false }
       });
       if (!item) {
         return res.status(404).json({ message: 'Artikulli i inventarit nuk u gjet.' });
-      }
-
-      if (quantity_in_stock !== undefined && quantity_in_stock !== null && quantity_in_stock < 0) {
-        return res.status(400).json({
-          message: 'Sasia në stok nuk mund të jetë negative.'
-        });
       }
 
       if (minimum_stock !== undefined && minimum_stock !== null && minimum_stock < 0) {
@@ -163,11 +203,19 @@ const inventoryItemController = {
       const updateData = {};
       if (item_name) updateData.item_name = item_name;
       if (description !== undefined) updateData.description = description;
-      if (quantity_in_stock !== undefined && quantity_in_stock !== null) updateData.quantity_in_stock = quantity_in_stock;
       if (unit) updateData.unit = unit;
       if (minimum_stock !== undefined && minimum_stock !== null) updateData.minimum_stock = minimum_stock;
       if (expiry_date !== undefined) updateData.expiry_date = expiry_date;
+      if (category !== undefined) updateData.category = category || null;
+      if (supplier_name !== undefined) updateData.supplier_name = supplier_name || null;
+      if (batch_lot_number !== undefined) updateData.batch_lot_number = batch_lot_number || null;
+      if (purchase_price !== undefined) updateData.purchase_price = purchase_price === '' ? null : purchase_price;
+      if (storage_location !== undefined) updateData.storage_location = storage_location || null;
+      if (barcode !== undefined) updateData.barcode = barcode || null;
       if (status) updateData.status = status;
+      if (minimum_stock !== undefined && minimum_stock !== null && !status) {
+        updateData.status = getStockStatus(item.quantity_in_stock, minimum_stock);
+      }
 
       await item.update(updateData);
 

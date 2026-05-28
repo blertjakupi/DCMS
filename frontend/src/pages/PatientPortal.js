@@ -131,7 +131,7 @@ function PatientPortal() {
         details: nextAppointment 
           ? [
               { icon: 'person', text: nextAppointment.Dentist ? `Dr. ${nextAppointment.Dentist.first_name} ${nextAppointment.Dentist.last_name}` : 'Dentist' },
-              { icon: 'dentistry', text: nextAppointment.notes || 'Dental Appointment' },
+              { icon: 'dentistry', text: nextAppointment.Treatment?.treatment_name || 'Dental Appointment' },
             ]
           : [{ icon: 'info', text: 'Book your next checkup' }],
       },
@@ -171,7 +171,7 @@ function PatientPortal() {
       return {
         month: months[date.getMonth()],
         day: date.getDate().toString(),
-        treatment: app.notes || 'Routine Checkup',
+        treatment: app.Treatment?.treatment_name || 'Routine Checkup',
         dentist: app.Dentist ? `Dr. ${app.Dentist.first_name} ${app.Dentist.last_name}` : 'Dentist',
         time: `${formatTime(app.appointment_time)} (${app.duration || 30} mins)`,
       };

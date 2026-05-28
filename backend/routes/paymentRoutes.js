@@ -22,7 +22,7 @@ router.get('/:id',
 );
 
 router.post('/', 
-  roleMiddleware('ADMIN', 'RECEPTIONIST'), 
+  roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIENT'), 
   paymentController.createPayment
 );
 

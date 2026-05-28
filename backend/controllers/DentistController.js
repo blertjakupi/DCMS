@@ -7,7 +7,8 @@ const {
   Dentist,
   Appointment,
   Patient,
-  DentalRecord
+  DentalRecord,
+  Treatment
 } = require('../models');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -413,7 +414,10 @@ const dentistController = {
           appointment_date: today,
           status: { [Op.ne]: 'Cancelled' }
         },
-        include: [{ model: Patient, attributes: ['first_name', 'last_name'] }],
+        include: [
+          { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
+          { model: Treatment, attributes: ['treatment_id', 'treatment_name', 'average_duration'] }
+        ],
         order: [['appointment_time', 'ASC']]
       });
 
@@ -436,15 +440,22 @@ const dentistController = {
             { appointment_date: today, appointment_time: { [Op.gte]: currentTime } }
           ]
         },
-        include: [{ model: Patient, attributes: ['first_name', 'last_name'] }],
+        include: [
+          { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
+          { model: Treatment, attributes: ['treatment_id', 'treatment_name', 'average_duration'] }
+        ],
         order: [['appointment_date', 'ASC'], ['appointment_time', 'ASC']]
       });
 
       const schedule = todayApps.map(a => ({
         appointment_id: a.appointment_id,
+        appointment_date: a.appointment_date,
         appointment_time: a.appointment_time.slice(0, 5),
+        patient_id: a.patient_id,
         patient_name: `${a.Patient?.first_name || ''} ${a.Patient?.last_name || ''}`.trim(),
-        treatment_name: a.treatment_name || `Treatment #${a.treatment_id}`,
+        treatment_id: a.treatment_id,
+        treatment_name: a.Treatment?.treatment_name || `Treatment #${a.treatment_id}`,
+        duration: a.duration,
         status: a.status
       }));
 
@@ -494,6 +505,9 @@ const dentistController = {
         },
         nextAppointment: nextAppointment ? {
           time: nextAppointment.appointment_time.slice(0, 5),
+          date: nextAppointment.appointment_date,
+          appointment_id: nextAppointment.appointment_id,
+          treatment_name: nextAppointment.Treatment?.treatment_name || `Treatment #${nextAppointment.treatment_id}`,
           patient_name: `${nextAppointment.Patient?.first_name || ''} ${nextAppointment.Patient?.last_name || ''}`.trim(),
           minutes_to_go: Math.max(0, Math.ceil((new Date(`${nextAppointment.appointment_date}T${nextAppointment.appointment_time}`) - now) / 60000))
         } : null,

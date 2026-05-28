@@ -140,12 +140,14 @@ function PatientAppointments() {
         appointment.status === activeFilter;
         
       const dentistName = appointment.Dentist ? `${appointment.Dentist.first_name} ${appointment.Dentist.last_name}` : '';
+      const treatmentName = appointment.Treatment?.treatment_name || '';
       const notes = appointment.notes || '';
       
       const matchesSearch =
         !normalizedSearch ||
         notes.toLowerCase().includes(normalizedSearch) ||
-        dentistName.toLowerCase().includes(normalizedSearch);
+        dentistName.toLowerCase().includes(normalizedSearch) ||
+        treatmentName.toLowerCase().includes(normalizedSearch);
 
       return matchesFilter && matchesSearch;
     });
@@ -313,6 +315,7 @@ function PatientAppointments() {
               const dayStr = appDate.getDate().toString();
               const dentistName = appointment.Dentist ? `Dr. ${appointment.Dentist.first_name} ${appointment.Dentist.last_name}` : 'Dentist';
               const dentistInitials = appointment.Dentist ? `${appointment.Dentist.first_name[0]}${appointment.Dentist.last_name[0]}`.toUpperCase() : 'DN';
+              const treatmentName = appointment.Treatment?.treatment_name || 'Dental Care Visit';
 
               return (
                 <article
@@ -325,7 +328,7 @@ function PatientAppointments() {
                   </div>
 
                   <div className="flex-grow flex flex-col gap-2">
-                    <h3 className={`text-headline-md font-headline-md ${styles.title}`}>{appointment.notes || 'Dental Care Visit'}</h3>
+                    <h3 className={`text-headline-md font-headline-md ${styles.title}`}>{treatmentName}</h3>
                     <div className="flex flex-wrap items-center gap-4 text-on-surface-variant text-body-base">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container text-caption font-label-bold">
@@ -342,6 +345,9 @@ function PatientAppointments() {
                         <span>{appointment.duration || 30} mins</span>
                       </div>
                     </div>
+                    {appointment.notes && (
+                      <p className="text-caption text-on-surface-variant">{appointment.notes}</p>
+                    )}
                   </div>
 
                   <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-4 w-full sm:w-auto mt-4 sm:mt-0 pt-4 sm:pt-0 border-t border-outline-variant/20 sm:border-t-0">
@@ -441,7 +447,7 @@ function PatientAppointments() {
                 >
                   {treatments.map((t) => (
                     <option key={t.treatment_id} value={t.treatment_id}>
-                      {t.name} - ${parseFloat(t.price).toFixed(2)}
+                      {t.treatment_name} - ${parseFloat(t.price).toFixed(2)}
                     </option>
                   ))}
                   {treatments.length === 0 && <option>Nuk ka trajtime të disponueshme</option>}

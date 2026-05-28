@@ -11,8 +11,8 @@ router.get('/patient/:patientId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIE
 router.get('/dentist/:dentistId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), appointmentController.getAppointmentsByDentist);
 router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), appointmentController.getAll);
 router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), appointmentController.getById);
-router.post('/', roleMiddleware('ADMIN', 'RECEPTIONIST'), appointmentController.create);
-router.put('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST'), appointmentController.update);
-router.delete('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST'), appointmentController.delete);
+router.post('/', roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIENT'), appointmentController.create);
+router.put('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), appointmentController.update);
+router.delete('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'PATIENT'), appointmentController.delete);
 
 module.exports = router;

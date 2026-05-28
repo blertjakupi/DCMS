@@ -60,7 +60,10 @@ function Dashboard() {
 
         if (data.nextAppointment) {
           setNextAppointment({
+            appointment_id: data.nextAppointment.appointment_id,
+            appointment_date: data.nextAppointment.date,
             appointment_time: data.nextAppointment.time,
+            treatment_name: data.nextAppointment.treatment_name,
             Patient: {
               first_name: data.nextAppointment.patient_name.split(' ')[0],
               last_name: data.nextAppointment.patient_name.split(' ').slice(1).join(' ') || ''
@@ -172,7 +175,12 @@ function Dashboard() {
               <div className="relative z-10">
                 <p className="text-caption font-caption text-on-surface-variant mb-unit uppercase tracking-wider">Next Appointment</p>
                 <p className="text-headline-md font-headline-md text-on-background">{nextAppointment ? formatTime(nextAppointment.appointment_time) : 'None'}</p>
-                {nextAppointment && <p className="text-caption text-on-surface-variant">{nextAppointment.Patient?.first_name} {nextAppointment.Patient?.last_name}</p>}
+                {nextAppointment && (
+                  <p className="text-caption text-on-surface-variant">
+                    {nextAppointment.Patient?.first_name} {nextAppointment.Patient?.last_name}
+                    {nextAppointment.treatment_name ? ` - ${nextAppointment.treatment_name}` : ''}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -181,7 +189,7 @@ function Dashboard() {
             <div className="lg:col-span-8 bg-surface-container-lowest rounded-[24px] p-md md:p-lg shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-surface-container-highest/30">
               <div className="flex items-center justify-between mb-md">
                 <h3 className="text-headline-md font-headline-md text-on-background">Today's Schedule</h3>
-                <button className="text-primary font-label-bold hover:underline text-sm">View Full Calendar</button>
+                <button className="text-primary font-label-bold hover:underline text-sm" onClick={() => navigate('/dentist/appointments')}>View Full Calendar</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
