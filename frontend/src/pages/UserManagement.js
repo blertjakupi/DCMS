@@ -131,18 +131,20 @@ const saveRole = async () => {
   }
 };
 
- const handleDeactivate = async (u) => {
-  if (u.status === 'Inactive') return;
-  if (!window.confirm(`Deactivate ${u.name}? The account will remain in the list as Inactive.`)) return;
+ const handleToggleStatus = async (u) => {
+  const isCurrentlyActive = u.status === 'Active';
+  const newStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+  const actionText = isCurrentlyActive ? 'deactivate' : 'reactivate';
+  if (!window.confirm(`${actionText === 'deactivate' ? 'Deactivate' : 'Reactivate'} ${u.name}? The account will ${actionText === 'deactivate' ? 'remain in the list as Inactive' : 'become Active again'}.`)) return;
   setDeleting(u.id);
   try {
     const res = await authFetch(`/api/users/${u.id}`, {
       method: 'PUT',
-      body: JSON.stringify({ status: 'Inactive' }),
+      body: JSON.stringify({ status: newStatus }),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.message || 'Failed to deactivate user');
+      throw new Error(errData.message || `Failed to ${actionText} user`);
     }
     await fetchUsers();
   } catch (err) {
@@ -304,12 +306,18 @@ const saveRole = async () => {
                                   <span className="material-symbols-outlined text-[18px]">edit_square</span> Edit Role
                                 </button>
                                 <button
-                                  onClick={() => handleDeactivate(u)}
-                                  disabled={deleting === u.id || u.status === 'Inactive'}
-                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-error/30 text-error hover:bg-error/5 transition-colors text-xs font-semibold disabled:opacity-50"
+                                  onClick={() => handleToggleStatus(u)}
+                                  disabled={deleting === u.id}
+                                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-colors text-xs font-semibold ${
+                                    u.status === 'Inactive'
+                                      ? 'border-green-300 text-green-700 hover:bg-green-50'
+                                      : 'border-error/30 text-error hover:bg-error/5'
+                                  } disabled:opacity-50`}
                                 >
-                                  <span className="material-symbols-outlined text-[18px]">block</span>
-                                  {deleting === u.id ? 'Deactivating...' : 'Deactivate'}
+                                  <span className="material-symbols-outlined text-[18px]">
+                                    {u.status === 'Inactive' ? 'refresh' : 'block'}
+                                  </span>
+                                  {deleting === u.id ? (u.status === 'Inactive' ? 'Reactivating...' : 'Deactivating...') : (u.status === 'Inactive' ? 'Reactivate' : 'Deactivate')}
                                 </button>
                               </div>
                             </td>

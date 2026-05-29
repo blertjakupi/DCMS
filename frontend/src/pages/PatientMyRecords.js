@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
 import { authFetch } from '../utils/authFetch';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const recordTypes = ['All', 'Treatments', 'X-Rays', 'Documents'];
 
@@ -33,32 +35,143 @@ function PatientMyRecords() {
   const [activeType, setActiveType] = useState('All');
   const [search, setSearch] = useState('');
 
-  const downloadRecord = async (recordId) => {
-    try {
-      const response = await fetch(`/api/dental-records/${recordId}/download`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
+  const downloadRecord = async (record) => {
+  try {
+    const pdfContent = document.createElement('div');
+    pdfContent.style.position = 'absolute';
+    pdfContent.style.left = '-9999px';
+    pdfContent.style.top = '-9999px';
+    pdfContent.style.width = '800px';
+    pdfContent.style.padding = '0';
+    pdfContent.style.fontFamily = "'Inter', sans-serif";
+    pdfContent.style.backgroundColor = '#f8fafc';
+    pdfContent.style.color = '#111e1d';
+    pdfContent.style.lineHeight = '1.5';
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Download failed');
-      }
+    pdfContent.innerHTML = `
+      <div class="a4-canvas" style="width: 100%; max-width: 800px; min-height: 1123px; margin: 0 auto; background: white; box-shadow: none; padding: 60px 48px; font-family: 'Inter', sans-serif;">
+        <!-- Brand Header -->
+        <header style="display: flex; flex-direction: column; align-items: center; margin-bottom: 32px;">
+          <img src="/DentaCareLogo.png" alt="DentaCare Pro Logo" style="height: 64px; width: auto; margin-bottom: 16px; object-fit: contain;" onerror="this.style.display='none'">
+          <h1 style="font-family: 'Manrope', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #004943; margin: 0;">DentaCare Pro</h1>
+          <div style="margin-top: 32px; display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <p style="font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #3f4947; margin-bottom: 8px;">Dental Diagnosis Report</p>
+            <div style="height: 2px; width: 48px; background-color: #004943; border-radius: 9999px;"></div>
+          </div>
+        </header>
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `diagnosis-record-${recordId}.txt`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err.message);
+        <!-- Summary Metadata Card -->
+        <section style="background-color: #e8f7f5; border: 1px solid #bec9c6; border-radius: 12px; padding: 16px; margin-bottom: 32px;">
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 20px;">
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Record ID</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.id}</p>
+            </div>
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Date</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.date}</p>
+            </div>
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Patient</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${patient?.first_name || ''} ${patient?.last_name || ''}</p>
+            </div>
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Tooth</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.tooth || '—'}</p>
+            </div>
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Provider</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.provider}</p>
+            </div>
+            <div>
+              <label style="font-weight: 700; font-size: 12px; color: #004943; display: block; margin-bottom: 4px;">Type</label>
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.type}</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Content Body -->
+        <div style="display: flex; flex-direction: column; gap: 32px; flex-grow: 1;">
+          <!-- Diagnosis Section -->
+          <section>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div style="width: 4px; height: 32px; background-color: #004943; border-radius: 9999px;"></div>
+              <h2 style="font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 600; color: #004943; margin: 0;">Diagnosis / Condition</h2>
+            </div>
+            <div style="background-color: #e8f7f5; border-radius: 8px; padding: 16px; border: 1px solid transparent;">
+              <p style="font-size: 16px; line-height: 24px; color: #111e1d; margin: 0;">${record.title}</p>
+            </div>
+          </section>
+
+          <!-- Clinical Notes Section -->
+          <section>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div style="width: 4px; height: 32px; background-color: #004943; border-radius: 9999px;"></div>
+              <h2 style="font-family: 'Manrope', sans-serif; font-size: 20px; font-weight: 600; color: #004943; margin: 0;">Clinical Notes</h2>
+            </div>
+            <div style="background-color: #e8f7f5; border-radius: 8px; padding: 16px; min-height: 100px;">
+              <p style="font-size: 14px; line-height: 20px; color: #111e1d; margin: 0;">${record.notes}</p>
+            </div>
+          </section>
+
+          <!-- No Images Placeholder -->
+          <section style="margin-top: 32px;">
+            <div style="border-top: 1px solid #bec9c6; padding-top: 32px; text-align: center;">
+              <p style="font-size: 14px; color: #6f7977; font-style: italic;">No diagnostic images or radiographs attached to this report.</p>
+            </div>
+          </section>
+        </div>
+
+        <!-- Footer -->
+        <footer style="margin-top: 32px; border-top: 1px solid #bec9c6; padding-top: 16px; text-align: center;">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <p style="font-size: 14px; line-height: 20px; color: #3f4947; margin: 0;">DentaCare Pro – Dukagjini Center, Prishtina, Kati 3 | Tel: +383 44 111 222</p>
+            <p style="font-size: 12px; line-height: 16px; color: #6f7977; font-style: italic; margin: 0;">This document is electronically generated and does not require a physical signature.</p>
+            <p style="font-weight: 700; font-size: 12px; line-height: 16px; color: #3f4947; margin-top: 8px;">Generated on ${new Date().toLocaleDateString()}</p>
+          </div>
+          <div style="margin-top: 16px; display: flex; justify-content: center; align-items: center; gap: 16px; opacity: 0.2;">
+            <div style="height: 1px; width: 80px; background-color: #6f7977;"></div>
+            <span style="font-family: 'Material Symbols Outlined'; font-size: 16px; color: #6f7977; font-variation-settings: 'FILL' 1;">verified_user</span>
+            <div style="height: 1px; width: 80px; background-color: #6f7977;"></div>
+          </div>
+        </footer>
+      </div>
+    `;
+
+    document.body.appendChild(pdfContent);
+
+    const canvas = await html2canvas(pdfContent, {
+      scale: 2,
+      backgroundColor: '#f8fafc',
+      logging: false,
+      useCORS: true,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
     }
-  };
+
+    pdf.save(`diagnosis-record-${record.id}.pdf`);
+    document.body.removeChild(pdfContent);
+  } catch (err) {
+    console.error(err);
+    setError('Failed to generate PDF. Please try again.');
+  }
+};
 
   useEffect(() => {
     const initPage = async () => {
@@ -247,7 +360,7 @@ function PatientMyRecords() {
                     </span>
                     <button
                       className="w-10 h-10 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
-                      onClick={() => downloadRecord(record.id)}
+                      onClick={() => downloadRecord(record)}
                       title="Download diagnosis"
                     >
                       <span className="material-symbols-outlined">download</span>
