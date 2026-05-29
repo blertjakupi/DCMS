@@ -134,7 +134,7 @@ function PatientPortal() {
       },
       {
         icon: 'payments',
-        label: 'Outstanding Balance',
+        label: 'Balance',
         title: `$${outstandingBalance.toFixed(2)}`,
         action: outstandingBalance > 0 ? 'Pay Now' : null,
         details: outstandingBalance === 0 ? [{ icon: 'check_circle', text: 'All bills paid!' }] : null,

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
 import { authFetch } from '../utils/authFetch';
@@ -35,6 +36,8 @@ const formatDate = (value) => {
 };
 
 function DentistDentalRecords() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [patients, setPatients] = useState([]);
   const [dentists, setDentists] = useState([]);
@@ -104,6 +107,17 @@ function DentistDentalRecords() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    const viewRecordId = location.state?.viewRecordId;
+    if (!viewRecordId || records.length === 0) return;
+
+    const matchingRecord = records.find((record) => String(record.record_id) === String(viewRecordId));
+    if (matchingRecord) {
+      setViewRecord(matchingRecord);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate, records]);
 
   const stats = useMemo(() => {
     const recentDate = new Date();

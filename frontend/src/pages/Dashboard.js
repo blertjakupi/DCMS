@@ -13,6 +13,25 @@ const formatTime = (timeStr) => {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 };
 
+const formatTimeUntil = (appointmentDate, appointmentTime) => {
+  const appointmentDateTime = new Date(`${appointmentDate}T${appointmentTime}`);
+  const minutesUntil = Math.max(0, Math.ceil((appointmentDateTime - new Date()) / 60000));
+
+  if (minutesUntil < 1) return 'Now';
+  if (minutesUntil < 60) return `${minutesUntil} min`;
+
+  const days = Math.floor(minutesUntil / 1440);
+  const hours = Math.floor((minutesUntil % 1440) / 60);
+  const minutes = minutesUntil % 60;
+  const parts = [];
+
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes && !days) parts.push(`${minutes}m`);
+
+  return parts.join(' ');
+};
+
 const getStatusStyle = (status) => {
   const map = {
     Scheduled: 'bg-surface-container-highest text-on-surface-variant',
@@ -171,7 +190,7 @@ function Dashboard() {
                 </div>
                 {nextAppointment && (
                   <span className="text-caption font-label-bold text-primary bg-primary-container/20 px-2 py-1 rounded-full">
-                    In {Math.max(0, Math.ceil((new Date(`${nextAppointment.appointment_date}T${nextAppointment.appointment_time}`) - new Date()) / 60000))}m
+                    In {formatTimeUntil(nextAppointment.appointment_date, nextAppointment.appointment_time)}
                   </span>
                 )}
               </div>
@@ -284,7 +303,7 @@ function Dashboard() {
                     <tr><td colSpan="4" className="py-4 text-center text-on-surface-variant">No records yet</td></tr>
                   ) : (
                     filteredRecentRecords.map((r) => (
-                      <tr key={r.name} className="hover:bg-surface-container-highest/50 transition-colors">
+                      <tr key={r.record_id || r.name} className="hover:bg-surface-container-highest/50 transition-colors">
                         <td className="py-sm pl-2 font-semibold text-on-background">
                           <div className="flex items-center gap-3">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${r.color}`}>{r.initials}</div>
@@ -294,7 +313,13 @@ function Dashboard() {
                         <td className="py-sm text-on-surface-variant">{r.lastVisit}</td>
                         <td className="py-sm text-on-surface-variant">{r.treatment}</td>
                         <td className="py-sm text-right pr-2">
-                          <button className="text-primary font-label-bold text-sm px-3 py-1 rounded border border-primary/20 hover:bg-primary/5 transition-all">View</button>
+                          <button
+                            className="text-primary font-label-bold text-sm px-3 py-1 rounded border border-primary/20 hover:bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!r.record_id}
+                            onClick={() => navigate('/dentist/dental-records', { state: { viewRecordId: r.record_id } })}
+                          >
+                            View
+                          </button>
                         </td>
                       </tr>
                     ))

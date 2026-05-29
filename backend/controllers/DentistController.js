@@ -485,6 +485,7 @@ const dentistController = {
         const patientName = rec.Patient ? `${rec.Patient.first_name} ${rec.Patient.last_name}` : `Patient #${rec.patient_id}`;
         const initials = patientName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
         return {
+          record_id: rec.record_id,
           initials,
           name: patientName,
           lastVisit: rec.record_date,

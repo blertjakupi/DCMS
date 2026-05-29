@@ -41,6 +41,16 @@ const formatTimeLabel = (timeStr) => {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 };
 
+const getTodayDateString = () => {
+  const now = new Date();
+  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+};
+
+const getAppointmentDateTime = (appointment) => {
+  return new Date(`${appointment.appointment_date}T${appointment.appointment_time}`);
+};
+
 function PatientAppointments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,6 +74,7 @@ function PatientAppointments() {
   // Search/Filters
   const [activeFilter, setActiveFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const todayDate = getTodayDateString();
 
   const fetchAppointments = async (patientId) => {
     try {
@@ -156,6 +167,12 @@ function PatientAppointments() {
       return;
     }
 
+    const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
+    if (selectedDate < todayDate || selectedDateTime < new Date()) {
+      setBookingError('Nuk mund të rezervoni takim në datë ose orë të kaluar.');
+      return;
+    }
+
     setBookingLoading(true);
     setBookingError('');
     try {
@@ -193,11 +210,16 @@ function PatientAppointments() {
     }
   };
 
-  const handleCancelAppointment = async (apptId) => {
+  const handleCancelAppointment = async (appointment) => {
+    if (!appointment || appointment.status !== 'Scheduled' || getAppointmentDateTime(appointment) < new Date()) {
+      alert('Nuk mund të anuloni një takim që ka kaluar.');
+      return;
+    }
+
     if (!window.confirm('A jeni të sigurt që dëshironi të anuloni këtë takim?')) return;
     
     try {
-      const res = await authFetch(`/api/appointments/${apptId}`, {
+      const res = await authFetch(`/api/appointments/${appointment.appointment_id}`, {
         method: 'DELETE',
 
       });
@@ -304,13 +326,14 @@ function PatientAppointments() {
           <div className="flex flex-col gap-4">
             {visibleAppointments.map((appointment) => {
               const styles = statusStyles[appointment.status] || statusStyles.Scheduled;
-              const appDate = new Date(appointment.appointment_date);
+              const appDate = new Date(`${appointment.appointment_date}T00:00:00`);
               const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
               const monthStr = months[appDate.getMonth()];
               const dayStr = appDate.getDate().toString();
               const dentistName = appointment.Dentist ? `Dr. ${appointment.Dentist.first_name} ${appointment.Dentist.last_name}` : 'Dentist';
               const dentistInitials = appointment.Dentist ? `${appointment.Dentist.first_name[0]}${appointment.Dentist.last_name[0]}`.toUpperCase() : 'DN';
               const treatmentName = appointment.Treatment?.treatment_name || 'Dental Care Visit';
+              const canCancel = appointment.status === 'Scheduled' && getAppointmentDateTime(appointment) >= new Date();
 
               return (
                 <article
@@ -353,9 +376,9 @@ function PatientAppointments() {
                       {appointment.status}
                     </span>
                     <div className="flex gap-2">
-                      {appointment.status === 'Scheduled' && (
+                      {canCancel && (
                         <button
-                          onClick={() => handleCancelAppointment(appointment.appointment_id)}
+                          onClick={() => handleCancelAppointment(appointment)}
                           className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-error-container hover:text-error transition-colors"
                           title="Anulo Takimin"
                         >
@@ -457,6 +480,7 @@ function PatientAppointments() {
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="w-full px-4 py-2 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-body-base"
                     type="date"
+                    min={todayDate}
                     required
                   />
                 </div>

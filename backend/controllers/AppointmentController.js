@@ -10,6 +10,14 @@ const { syncReminderForAppointment } = require('../services/reminderService');
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
 
+const getAppointmentDateTime = (appointmentDate, appointmentTime = '00:00:00') => {
+  return new Date(`${appointmentDate}T${appointmentTime}`);
+};
+
+const isPastAppointmentDateTime = (appointmentDate, appointmentTime) => {
+  return getAppointmentDateTime(appointmentDate, appointmentTime) < new Date();
+};
+
 const timeToMinutes = (time) => {
   const [hours, minutes] = String(time || '00:00').split(':').map(Number);
   return (hours * 60) + minutes;
@@ -370,6 +378,12 @@ const appointmentController = {
               message: 'Pacienti mund te krijoje vetem termine me status Scheduled.'
             });
           }
+
+          if (isPastAppointmentDateTime(appointment_date, appointment_time)) {
+            return res.status(400).json({
+              message: 'Nuk mund te rezervoni termin ne date ose ore te kaluar.'
+            });
+          }
         }
 
         
@@ -511,6 +525,18 @@ const appointmentController = {
         if (!onlyCancelling) {
           return res.status(403).json({
             message: 'Pacienti mund te anuloje vetem terminin e vet.'
+          });
+        }
+
+        if (appointment.status !== 'Scheduled') {
+          return res.status(400).json({
+            message: 'Mund te anulohen vetem terminet e planifikuara.'
+          });
+        }
+
+        if (isPastAppointmentDateTime(appointment.appointment_date, appointment.appointment_time)) {
+          return res.status(400).json({
+            message: 'Nuk mund te anuloni nje termin qe ka kaluar.'
           });
         }
       }
@@ -701,6 +727,18 @@ const appointmentController = {
         if (!ownPatient || ownPatient.patient_id !== appointment.patient_id) {
           return res.status(403).json({
             message: 'Nuk keni akses per te anuluar kete termin.'
+          });
+        }
+
+        if (appointment.status !== 'Scheduled') {
+          return res.status(400).json({
+            message: 'Mund te anulohen vetem terminet e planifikuara.'
+          });
+        }
+
+        if (isPastAppointmentDateTime(appointment.appointment_date, appointment.appointment_time)) {
+          return res.status(400).json({
+            message: 'Nuk mund te anuloni nje termin qe ka kaluar.'
           });
         }
       }
