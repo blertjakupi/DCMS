@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyForm = {
   first_name: '',
@@ -52,12 +53,11 @@ function DentistsManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [viewDentist, setViewDentist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -96,7 +96,10 @@ function DentistsManagement() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setQuickAddOpen(false);
+      if (event.key === 'Escape') {
+        setQuickAddOpen(false);
+        setViewDentist(null);
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -174,19 +177,40 @@ function DentistsManagement() {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setQuickAddOpen(true);
+  };
+
+  const openEdit = (dentist) => {
+    setEditingId(dentist.dentist_id);
+    setForm({
+      first_name: dentist.first_name || '',
+      last_name: dentist.last_name || '',
+      email: dentist.email || dentist.User?.email || '',
+      password: '',
+      phone_number: dentist.phone || dentist.User?.phone_number || '',
+      birth_date: dentist.birth_date || '',
+      specialization: dentist.specialization || '',
+    });
+    setQuickAddOpen(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
 
     try {
-      const response = await fetch('/api/dentists', {
-        method: 'POST',
+      const response = await fetch(editingId ? `/api/dentists/${editingId}` : '/api/dentists', {
+        method: editingId ? 'PUT' : 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           ...form,
           phone: form.phone_number,
           status: 'Active',
+          ...(editingId ? { password: undefined } : {}),
         }),
       });
       const json = await response.json();
@@ -194,6 +218,7 @@ function DentistsManagement() {
       if (!response.ok) throw new Error(json.message || 'Dentist could not be created.');
 
       setForm(emptyForm);
+      setEditingId(null);
       setQuickAddOpen(false);
       await loadData();
     } catch (err) {
@@ -255,17 +280,7 @@ function DentistsManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
@@ -280,7 +295,7 @@ function DentistsManagement() {
           </div>
           <button
             className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-            onClick={() => setQuickAddOpen(true)}
+            onClick={openCreate}
           >
             <span className="material-symbols-outlined">person_add</span>
             Add New Dentist
@@ -392,7 +407,7 @@ function DentistsManagement() {
                         </td>
                         <td className="px-gutter py-md">
                           <p className="text-caption text-on-surface">{scheduleLabel(dentist.dentist_id)}</p>
-                          <button className="text-primary text-xs font-label-bold hover:underline mt-1">Manage Shifts</button>
+                          <button className="text-primary text-xs font-label-bold hover:underline mt-1" onClick={() => setViewDentist(dentist)}>Manage Shifts</button>
                         </td>
                         <td className="px-gutter py-md">
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-caption font-label-bold ${availabilityClasses[availability]}`}>
@@ -402,10 +417,18 @@ function DentistsManagement() {
                         </td>
                         <td className="px-gutter py-md text-right">
                           <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="View">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="View"
+                              onClick={() => setViewDentist(dentist)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">visibility</span>
                             </button>
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Edit"
+                              onClick={() => openEdit(dentist)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
                             <button
@@ -437,7 +460,11 @@ function DentistsManagement() {
         className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           quickAddOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setQuickAddOpen(false)}
+        onClick={() => {
+          setQuickAddOpen(false);
+          setEditingId(null);
+          setForm(emptyForm);
+        }}
       >
         <form
           className={`fixed right-0 top-0 h-screen w-full max-w-md bg-surface-container-lowest shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
@@ -447,8 +474,12 @@ function DentistsManagement() {
           onSubmit={handleSubmit}
         >
           <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
-            <h3 className="text-headline-md font-headline-md text-primary">Add New Dentist</h3>
-            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setQuickAddOpen(false)}>
+            <h3 className="text-headline-md font-headline-md text-primary">{editingId ? 'Edit Dentist' : 'Add New Dentist'}</h3>
+            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -494,10 +525,12 @@ function DentistsManagement() {
                 <label className="font-label-bold text-on-surface-variant text-caption">Date of Birth</label>
                 <input className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base" type="date" value={form.birth_date} onChange={(event) => updateForm('birth_date', event.target.value)} />
               </div>
+              {!editingId && (
               <div className="space-y-unit">
                 <label className="font-label-bold text-on-surface-variant text-caption">Temporary Password</label>
                 <input className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base" placeholder="8+ characters" type="password" minLength="8" value={form.password} onChange={(event) => updateForm('password', event.target.value)} required />
               </div>
+              )}
             </div>
 
             <div className="bg-surface-container p-md rounded-2xl">
@@ -511,15 +544,48 @@ function DentistsManagement() {
           </div>
 
           <div className="p-gutter border-t border-outline-variant/30 flex gap-md">
-            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => setQuickAddOpen(false)}>
+            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               Cancel
             </button>
             <button className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-label-bold hover:bg-on-primary-fixed-variant transition-all shadow-md active:scale-95 disabled:opacity-60" type="submit" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Dentist'}
+              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Save Dentist'}
             </button>
           </div>
         </form>
       </div>
+
+      {viewDentist && (
+        <div className="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewDentist(null)}>
+          <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+              <h3 className="text-headline-md font-headline-md text-primary">Dentist Details</h3>
+              <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setViewDentist(null)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-gutter grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {[
+                ['Name', `Dr. ${fullName(viewDentist)}`],
+                ['Email', viewDentist.email || viewDentist.User?.email || '-'],
+                ['Phone', viewDentist.phone || viewDentist.User?.phone_number || '-'],
+                ['Birth Date', viewDentist.birth_date || '-'],
+                ['Specialization', viewDentist.specialization || 'General Dentistry'],
+                ['Availability', dentistAvailability(viewDentist)],
+                ['Schedule', scheduleLabel(viewDentist.dentist_id)],
+              ].map(([label, value]) => (
+                <div key={label} className={label === 'Schedule' ? 'sm:col-span-2' : ''}>
+                  <p className="text-caption font-label-bold text-on-surface-variant uppercase">{label}</p>
+                  <p className="text-body-base text-on-surface mt-1">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

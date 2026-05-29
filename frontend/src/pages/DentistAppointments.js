@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const statusStyles = {
   Scheduled: 'bg-blue-100 text-blue-700',
@@ -50,9 +51,6 @@ const formatTime = (value) => {
 };
 
 function DentistAppointments() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'DR';
-
   const [appointments, setAppointments] = useState([]);
   const [filter, setFilter] = useState('today');
   const [search, setSearch] = useState('');
@@ -181,14 +179,7 @@ function DentistAppointments() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">

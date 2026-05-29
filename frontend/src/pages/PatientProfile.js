@@ -40,6 +40,13 @@ function PatientProfile() {
   const [error, setError] = useState('');
   const [patient, setPatient] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
   
   const [settings, setSettings] = useState([
     { label: 'Email Notifications', enabled: true },
@@ -130,6 +137,46 @@ function PatientProfile() {
         setting.label === label ? { ...setting, enabled: !setting.enabled } : setting
       )
     );
+  };
+
+  const changePassword = async () => {
+    setPasswordSaving(true);
+    setPasswordMessage('');
+    try {
+      if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+        throw new Error('All password fields are required.');
+      }
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        throw new Error('New password and confirmation do not match.');
+      }
+
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          current_password: passwordForm.currentPassword,
+          new_password: passwordForm.newPassword,
+          confirm_password: passwordForm.confirmPassword,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.message || 'Failed to change password.');
+      }
+
+      setPasswordMessage(json.message || 'Password changed successfully. Please sign in again.');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }, 1200);
+    } catch (err) {
+      setPasswordMessage(err.message);
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   if (loading) {
@@ -269,6 +316,48 @@ function PatientProfile() {
                     <Toggle checked={setting.enabled} onChange={() => updateSetting(setting.label)} />
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <section className="bg-surface rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] p-gutter transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+              <h3 className="font-label-bold text-on-surface-variant mb-6 uppercase tracking-wider border-b border-outline-variant/20 pb-4">
+                Security
+              </h3>
+              <div className="flex flex-col gap-3">
+                {passwordMessage && (
+                  <div className="rounded-lg border border-outline-variant/30 bg-surface-container-low p-3 text-[13px] text-on-surface-variant">
+                    {passwordMessage}
+                  </div>
+                )}
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  type="password"
+                  placeholder="Current password"
+                  value={passwordForm.currentPassword}
+                  onChange={event => setPasswordForm(prev => ({ ...prev, currentPassword: event.target.value }))}
+                />
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  type="password"
+                  placeholder="New password"
+                  value={passwordForm.newPassword}
+                  onChange={event => setPasswordForm(prev => ({ ...prev, newPassword: event.target.value }))}
+                />
+                <input
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={passwordForm.confirmPassword}
+                  onChange={event => setPasswordForm(prev => ({ ...prev, confirmPassword: event.target.value }))}
+                />
+                <button
+                  onClick={changePassword}
+                  disabled={passwordSaving}
+                  className="w-full font-label-bold px-6 py-3 rounded-full transition-colors flex items-center justify-center gap-2 bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container shadow-sm active:scale-95 disabled:opacity-60"
+                >
+                  <span className="material-symbols-outlined text-[20px]">password</span>
+                  {passwordSaving ? 'Saving...' : 'Change Password'}
+                </button>
               </div>
             </section>
           </aside>

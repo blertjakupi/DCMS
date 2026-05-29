@@ -6,6 +6,16 @@ function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetStep, setResetStep] = useState('request');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetPhone, setResetPhone] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetError, setResetError] = useState('');
 
   const navigate = useNavigate();
 
@@ -38,11 +48,92 @@ function LoginPage() {
 	if (role === 'ADMIN') navigate('/admin/dashboard');
 	else if (role === 'DENTIST') navigate('/dentist/dashboard');
 	else if (role === 'PATIENT') navigate('/portal/dashboard');
+	else if (role === 'RECEPTIONIST') navigate('/receptionist/dashboard');
 	else navigate('/dashboard');
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openForgotPassword = () => {
+    setResetEmail(email);
+    setResetPhone('');
+    setResetToken('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetMessage('');
+    setResetError('');
+    setResetStep('request');
+    setResetOpen(true);
+  };
+
+  const requestPasswordReset = async (event) => {
+    event.preventDefault();
+    setResetLoading(true);
+    setResetError('');
+    setResetMessage('');
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: resetEmail,
+          phone_number: resetPhone
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not start password reset.');
+
+      setResetMessage(data.message || 'Reset instructions were created.');
+      if (data.resetToken) {
+        setResetToken(data.resetToken);
+        setResetStep('reset');
+      } else {
+        setResetToken('');
+      }
+    } catch (err) {
+      setResetError(err.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const submitPasswordReset = async (event) => {
+    event.preventDefault();
+    setResetLoading(true);
+    setResetError('');
+    setResetMessage('');
+
+    try {
+      if (newPassword !== confirmPassword) {
+        throw new Error('New password and confirmation do not match.');
+      }
+
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: resetToken,
+          new_password: newPassword,
+          confirm_password: confirmPassword
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Could not reset password.');
+
+      setResetMessage(data.message || 'Password reset successfully.');
+      setPassword('');
+      setTimeout(() => {
+        setResetOpen(false);
+        setResetStep('request');
+      }, 1200);
+    } catch (err) {
+      setResetError(err.message);
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -113,9 +204,9 @@ function LoginPage() {
                 <label className="text-[14px] font-semibold text-on-surface" htmlFor="password">
                   Password
                 </label>
-                <a className="text-[12px] text-primary hover:text-tertiary transition-colors" href="#">
+                <button className="text-[12px] text-primary hover:text-tertiary transition-colors" type="button" onClick={openForgotPassword}>
                   Forgot Password?
-                </a>
+                </button>
               </div>
               <input
                 className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
@@ -175,6 +266,107 @@ function LoginPage() {
 
         </div>
       </div>
+
+      {resetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setResetOpen(false)}>
+          <div className="w-full max-w-[430px] bg-surface-container-lowest rounded-[24px] shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-6 border-b border-outline-variant/20 flex items-center justify-between">
+              <div>
+                <h3 className="text-[22px] font-semibold text-on-surface">Reset Password</h3>
+                <p className="text-[14px] text-on-surface-variant mt-1">
+                  {resetStep === 'request' ? 'Verify your email and phone number.' : 'Set a new password.'}
+                </p>
+              </div>
+              <button className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant" type="button" onClick={() => setResetOpen(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-6">
+              {resetError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                  {resetError}
+                </div>
+              )}
+              {resetMessage && (
+                <div className="mb-4 p-3 bg-[#e6f4ea] border border-[#ceead6] rounded text-[#137333] text-sm">
+                  {resetMessage}
+                </div>
+              )}
+
+              {resetStep === 'request' ? (
+                <form className="flex flex-col gap-4" onSubmit={requestPasswordReset}>
+                  <div>
+                    <label className="text-[14px] font-semibold text-on-surface" htmlFor="reset-email">Email Address</label>
+                    <input
+                      className="mt-1 w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                      id="reset-email"
+                      type="email"
+                      value={resetEmail}
+                      onChange={(event) => setResetEmail(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[14px] font-semibold text-on-surface" htmlFor="reset-phone">Phone Number</label>
+                    <input
+                      className="mt-1 w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                      id="reset-phone"
+                      type="tel"
+                      value={resetPhone}
+                      onChange={(event) => setResetPhone(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <button className="w-full bg-primary text-on-primary py-[12px] rounded-lg text-[14px] font-semibold hover:bg-[#005049] transition-colors disabled:opacity-60" type="submit" disabled={resetLoading}>
+                    {resetLoading ? 'Verifying...' : 'Verify and Continue'}
+                  </button>
+                </form>
+              ) : (
+                <form className="flex flex-col gap-4" onSubmit={submitPasswordReset}>
+                  <div>
+                    <label className="text-[14px] font-semibold text-on-surface" htmlFor="reset-token">Reset Token</label>
+                    <input
+                      className="mt-1 w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                      id="reset-token"
+                      value={resetToken}
+                      onChange={(event) => setResetToken(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[14px] font-semibold text-on-surface" htmlFor="new-password">New Password</label>
+                    <input
+                      className="mt-1 w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                      id="new-password"
+                      type="password"
+                      minLength="8"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[14px] font-semibold text-on-surface" htmlFor="confirm-password">Confirm Password</label>
+                    <input
+                      className="mt-1 w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
+                      id="confirm-password"
+                      type="password"
+                      minLength="8"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      required
+                    />
+                  </div>
+                  <button className="w-full bg-primary text-on-primary py-[12px] rounded-lg text-[14px] font-semibold hover:bg-[#005049] transition-colors disabled:opacity-60" type="submit" disabled={resetLoading}>
+                    {resetLoading ? 'Saving...' : 'Reset Password'}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

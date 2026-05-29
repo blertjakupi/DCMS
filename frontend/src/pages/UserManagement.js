@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const roleBadge = {
   Admin: 'bg-primary-container/20 text-on-primary-container border-primary-container/30',
@@ -46,11 +47,6 @@ function mapApiUser(u) {
 }
 
 function UserManagement() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'AD';
-
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -144,20 +140,24 @@ const saveRole = async () => {
   }
 };
 
-  const handleDelete = async (u) => {
-    if (!window.confirm(`Are you sure you want to delete ${u.name}? This action cannot be undone.`)) return;
+  const handleDeactivate = async (u) => {
+    if (u.status === 'Inactive') return;
+    if (!window.confirm(`Deactivate ${u.name}? The account will remain in the list as Inactive.`)) return;
     setDeleting(u.id);
     try {
       const token = localStorage.getItem('accessToken');
       const res = await fetch(`/api/users/${u.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'Inactive' }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to delete user');
+        throw new Error(errData.message || 'Failed to deactivate user');
       }
-      // Refresh the list from the server
       await fetchUsers();
     } catch (err) {
       setError(err.message);
@@ -181,23 +181,12 @@ const saveRole = async () => {
                 className="bg-transparent border-none focus:ring-0 text-[15px] text-on-surface w-full placeholder:text-outline p-0 focus:outline-none"
                 placeholder="Search patients, dentists, or records..."
                 type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
-            </button>
-            <button className="p-1 rounded-full hover:bg-surface-container-highest transition-colors">
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[14px] font-semibold">
-                {initials}
-              </div>
-            </button>
-          </div>
+          <HeaderActions />
         </header>
 
         {/* Main Canvas */}
@@ -329,12 +318,12 @@ const saveRole = async () => {
                                   <span className="material-symbols-outlined text-[18px]">edit_square</span> Edit Role
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(u)}
-                                  disabled={deleting === u.id}
+                                  onClick={() => handleDeactivate(u)}
+                                  disabled={deleting === u.id || u.status === 'Inactive'}
                                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-error/30 text-error hover:bg-error/5 transition-colors text-xs font-semibold disabled:opacity-50"
                                 >
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                  {deleting === u.id ? 'Deleting...' : 'Delete'}
+                                  <span className="material-symbols-outlined text-[18px]">block</span>
+                                  {deleting === u.id ? 'Deactivating...' : 'Deactivate'}
                                 </button>
                               </div>
                             </td>

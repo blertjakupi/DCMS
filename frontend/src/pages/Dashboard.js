@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -37,6 +38,7 @@ function Dashboard() {
   const [todaySchedule, setTodaySchedule] = useState([]);
   const [patientQueue, setPatientQueue] = useState([]);
   const [recentRecords, setRecentRecords] = useState([]);
+  const [headerSearch, setHeaderSearch] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -89,8 +91,25 @@ function Dashboard() {
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const displayName = dentist?.first_name ? `${dentist.first_name} ${dentist.last_name}` : (user.full_name || 'Doctor');
-  const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const filteredTodaySchedule = todaySchedule.filter((item) => {
+    const query = headerSearch.trim().toLowerCase();
+    return !query ||
+      (item.patient || '').toLowerCase().includes(query) ||
+      (item.treatment || '').toLowerCase().includes(query);
+  });
+  const filteredPatientQueue = patientQueue.filter((item) => {
+    const query = headerSearch.trim().toLowerCase();
+    return !query ||
+      (item.name || '').toLowerCase().includes(query) ||
+      (item.location || '').toLowerCase().includes(query);
+  });
+  const filteredRecentRecords = recentRecords.filter((item) => {
+    const query = headerSearch.trim().toLowerCase();
+    return !query ||
+      (item.name || '').toLowerCase().includes(query) ||
+      (item.treatment || '').toLowerCase().includes(query);
+  });
 
   if (loading) return <div className="p-8 text-center">Loading dashboard...</div>;
   if (error) return <div className="p-8 text-error text-center">Error: {error}</div>;
@@ -104,23 +123,10 @@ function Dashboard() {
           <div className="flex items-center flex-1">
             <div className="relative w-full max-w-md hidden md:block">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-              <input className="w-full pl-10 pr-4 py-2 bg-surface-container-highest border-none rounded-full text-body-base focus:ring-2 focus:ring-primary/20 focus:bg-surface transition-all" placeholder="Search patients, records..." type="text" />
+              <input className="w-full pl-10 pr-4 py-2 bg-surface-container-highest border-none rounded-full text-body-base focus:ring-2 focus:ring-primary/20 focus:bg-surface transition-all" placeholder="Search patients, records..." type="text" value={headerSearch} onChange={(event) => setHeaderSearch(event.target.value)} />
             </div>
           </div>
-          <div className="flex items-center gap-sm">
-            <button className="w-10 h-10 rounded-full hover:bg-surface-container-highest transition-all flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined">notifications</span>
-            </button>
-            <button className="w-10 h-10 rounded-full hover:bg-surface-container-highest transition-all flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined">help_outline</span>
-            </button>
-            <button className="w-10 h-10 rounded-full hover:bg-surface-container-highest transition-all flex items-center justify-center text-on-surface-variant">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary text-on-primary font-bold shadow-sm cursor-pointer">
-              {initials}
-            </div>
-          </div>
+          <HeaderActions />
         </header>
 
         <main className="flex-1 overflow-y-auto mt-16 p-gutter pb-xl bg-background">
@@ -202,10 +208,10 @@ function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="text-body-base divide-y divide-outline-variant/20">
-                    {todaySchedule.length === 0 ? (
+                    {filteredTodaySchedule.length === 0 ? (
                       <tr><td colSpan="4" className="py-4 text-center text-on-surface-variant">No appointments today</td></tr>
                     ) : (
-                      todaySchedule.map((appt) => (
+                      filteredTodaySchedule.map((appt) => (
                         <tr key={appt.appointment_id} className="hover:bg-surface-container-lowest transition-colors">
                           <td className="py-md whitespace-nowrap font-label-bold text-on-surface-variant">{formatTime(appt.appointment_time)}</td>
                           <td className="py-md font-semibold text-on-background">{appt.patient_name}</td>
@@ -226,13 +232,13 @@ function Dashboard() {
             <div className="lg:col-span-4 bg-surface-container-lowest rounded-[24px] p-md md:p-lg shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-surface-container-highest/30 flex flex-col">
               <div className="flex items-center justify-between mb-md">
                 <h3 className="text-headline-md font-headline-md text-on-background">Patient Queue</h3>
-                <span className="bg-surface-container-highest text-on-surface-variant text-xs px-2 py-1 rounded-full font-label-bold">{patientQueue.length} Waiting</span>
+                <span className="bg-surface-container-highest text-on-surface-variant text-xs px-2 py-1 rounded-full font-label-bold">{filteredPatientQueue.length} Waiting</span>
               </div>
               <div className="flex-1 overflow-y-auto pr-2 space-y-sm">
-                {patientQueue.length === 0 ? (
+                {filteredPatientQueue.length === 0 ? (
                   <div className="text-center text-on-surface-variant py-4">No patients waiting</div>
                 ) : (
-                  patientQueue.map((p, idx) => (
+                  filteredPatientQueue.map((p, idx) => (
                     <div key={idx} className={`flex items-center gap-sm p-sm rounded-xl border transition-colors cursor-pointer ${
                       p.active ? 'border-primary/20 bg-primary/5 hover:bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container-highest'
                     }`}>
@@ -277,10 +283,10 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="text-body-base divide-y divide-outline-variant/10">
-                  {recentRecords.length === 0 ? (
+                  {filteredRecentRecords.length === 0 ? (
                     <tr><td colSpan="4" className="py-4 text-center text-on-surface-variant">No records yet</td></tr>
                   ) : (
-                    recentRecords.map((r) => (
+                    filteredRecentRecords.map((r) => (
                       <tr key={r.name} className="hover:bg-surface-container-highest/50 transition-colors">
                         <td className="py-sm pl-2 font-semibold text-on-background">
                           <div className="flex items-center gap-3">

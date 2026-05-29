@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyForm = {
   treatment_name: '',
@@ -16,15 +17,6 @@ const authHeaders = () => ({
 });
 
 const fullName = (item) => [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
-
-const initials = (name) =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'NA';
 
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -67,9 +59,6 @@ function TreatmentsManagement() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -261,17 +250,7 @@ function TreatmentsManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 
 const emptyForm = {
@@ -71,12 +72,11 @@ function AppointmentsManagement() {
   const [search, setSearch] = useState('');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [viewAppointment, setViewAppointment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -119,7 +119,10 @@ function AppointmentsManagement() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setQuickAddOpen(false);
+      if (event.key === 'Escape') {
+        setQuickAddOpen(false);
+        setViewAppointment(null);
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -162,22 +165,43 @@ function AppointmentsManagement() {
     (treatment) => String(treatment.treatment_id) === String(form.treatment_id)
   );
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setQuickAddOpen(true);
+  };
+
+  const openEdit = (appointment) => {
+    setEditingId(appointment.appointment_id);
+    setForm({
+      patient_id: appointment.patient_id || '',
+      dentist_id: appointment.dentist_id || '',
+      treatment_id: appointment.treatment_id || '',
+      appointment_date: appointment.appointment_date || '',
+      appointment_time: String(appointment.appointment_time || '').slice(0, 5),
+      notes: appointment.notes || '',
+      status: appointment.status || 'Scheduled',
+    });
+    setQuickAddOpen(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
 
     try {
-      const response = await fetch('/api/appointments', {
-        method: 'POST',
+      const response = await fetch(editingId ? `/api/appointments/${editingId}` : '/api/appointments', {
+        method: editingId ? 'PUT' : 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ ...form, status: 'Scheduled' }),
+        body: JSON.stringify({ ...form, status: form.status || 'Scheduled' }),
       });
       const json = await response.json();
 
       if (!response.ok) throw new Error(json.message || 'Appointment could not be created.');
 
       setForm(emptyForm);
+      setEditingId(null);
       setQuickAddOpen(false);
       await loadData();
     } catch (err) {
@@ -223,17 +247,7 @@ function AppointmentsManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
@@ -248,7 +262,7 @@ function AppointmentsManagement() {
           </div>
           <button
             className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-            onClick={() => setQuickAddOpen(true)}
+            onClick={openCreate}
           >
             <span className="material-symbols-outlined">add_circle</span>
             New Appointment
@@ -371,10 +385,19 @@ function AppointmentsManagement() {
                         </td>
                         <td className="px-gutter py-md text-right">
                           <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="View">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="View"
+                              onClick={() => setViewAppointment(appointment)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">visibility</span>
                             </button>
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Edit"
+                              onClick={() => openEdit(appointment)}
+                              disabled={appointment.status === 'Cancelled'}
+                            >
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
                             <button
@@ -406,7 +429,11 @@ function AppointmentsManagement() {
         className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           quickAddOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setQuickAddOpen(false)}
+        onClick={() => {
+          setQuickAddOpen(false);
+          setEditingId(null);
+          setForm(emptyForm);
+        }}
       >
         <form
           className={`fixed right-0 top-0 h-screen w-full max-w-md bg-surface-container-lowest shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
@@ -416,8 +443,12 @@ function AppointmentsManagement() {
           onSubmit={handleSubmit}
         >
           <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
-            <h3 className="text-headline-md font-headline-md text-primary">New Appointment</h3>
-            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setQuickAddOpen(false)}>
+            <h3 className="text-headline-md font-headline-md text-primary">{editingId ? 'Edit Appointment' : 'New Appointment'}</h3>
+            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -511,6 +542,22 @@ function AppointmentsManagement() {
               />
             </div>
 
+            {editingId && (
+              <div className="space-y-unit">
+                <label className="font-label-bold text-on-surface-variant text-caption">Status</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                  value={form.status}
+                  onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
+                >
+                  <option>Scheduled</option>
+                  <option>Completed</option>
+                  <option>Cancelled</option>
+                  <option>No-Show</option>
+                </select>
+              </div>
+            )}
+
             <div className="bg-surface-container p-md rounded-2xl">
               <div className="flex items-center gap-sm">
                 <span className="material-symbols-outlined text-primary">info</span>
@@ -525,7 +572,11 @@ function AppointmentsManagement() {
             <button
               className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors"
               type="button"
-              onClick={() => setQuickAddOpen(false)}
+              onClick={() => {
+                setQuickAddOpen(false);
+                setEditingId(null);
+                setForm(emptyForm);
+              }}
             >
               Cancel
             </button>
@@ -534,11 +585,40 @@ function AppointmentsManagement() {
               type="submit"
               disabled={saving}
             >
-              {saving ? 'Booking...' : 'Book Appointment'}
+              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Book Appointment'}
             </button>
           </div>
         </form>
       </div>
+
+      {viewAppointment && (
+        <div className="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewAppointment(null)}>
+          <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+              <h3 className="text-headline-md font-headline-md text-primary">Appointment Details</h3>
+              <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setViewAppointment(null)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-gutter grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {[
+                ['Patient', fullName(viewAppointment.Patient)],
+                ['Dentist', fullName(viewAppointment.Dentist)],
+                ['Treatment', viewAppointment.Treatment?.treatment_name || `Treatment #${viewAppointment.treatment_id}`],
+                ['Date', formatDate(viewAppointment.appointment_date)],
+                ['Time', formatTime(viewAppointment.appointment_time)],
+                ['Status', viewAppointment.status],
+                ['Notes', viewAppointment.notes || '-'],
+              ].map(([label, value]) => (
+                <div key={label} className={label === 'Notes' ? 'sm:col-span-2' : ''}>
+                  <p className="text-caption font-label-bold text-on-surface-variant uppercase">{label}</p>
+                  <p className="text-body-base text-on-surface mt-1">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

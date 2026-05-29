@@ -7,6 +7,7 @@ const roleMiddleware = require('../middleware/roleMiddleware');
 router.use(authMiddleware);
 
 router.get('/appointment/:appointmentId', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), reminderController.getByAppointment);
+router.get('/summary', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), reminderController.getSummary);
 router.get('/', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), reminderController.getAll);
 router.get('/:id', roleMiddleware('ADMIN', 'RECEPTIONIST', 'DENTIST', 'PATIENT'), reminderController.getById);
 

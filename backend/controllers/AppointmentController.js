@@ -6,6 +6,7 @@ const {
   Treatment
 } = require('../models');
 const appointmentService = require('../services/appointmentService');
+const { syncReminderForAppointment } = require('../services/reminderService');
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
 
@@ -444,6 +445,8 @@ const appointmentController = {
           ]
         });
 
+        await syncReminderForAppointment(createdAppointment);
+
         return res.status(201).json({
           message: 'Termini u krijua me sukses.',
           data: createdAppointment
@@ -462,6 +465,7 @@ const appointmentController = {
       const {
         patient_id,
         dentist_id,
+        treatment_id,
         appointment_date,
         appointment_time,
         duration,
@@ -500,6 +504,7 @@ const appointmentController = {
           dentist_id === undefined &&
           appointment_date === undefined &&
           appointment_time === undefined &&
+          treatment_id === undefined &&
           duration === undefined &&
           notes === undefined;
 
@@ -530,6 +535,7 @@ const appointmentController = {
           dentist_id === undefined &&
           appointment_date === undefined &&
           appointment_time === undefined &&
+          treatment_id === undefined &&
           duration === undefined &&
           notes === undefined;
 
@@ -584,16 +590,34 @@ const appointmentController = {
         }
       }
 
+      let selectedTreatment = null;
+      if (treatment_id) {
+        selectedTreatment = await Treatment.findOne({
+          where: {
+            treatment_id,
+            status: 'Active',
+            is_deleted: false
+          }
+        });
+
+        if (!selectedTreatment) {
+          return res.status(404).json({
+            message: 'Trajtimi nuk u gjet ose nuk eshte aktiv.'
+          });
+        }
+      }
+
       const effectiveDentistId = dentist_id || appointment.dentist_id;
       const effectiveDate = appointment_date || appointment.appointment_date;
       const effectiveTime = appointment_time || appointment.appointment_time;
+      const effectiveDuration = duration || selectedTreatment?.average_duration || appointment.duration;
 
-      if (dentist_id || appointment_date || appointment_time || duration) {
+      if (dentist_id || appointment_date || appointment_time || duration || treatment_id) {
         const conflictingAppointment = await findDentistTimeConflict({
           dentistId: effectiveDentistId,
           appointmentDate: effectiveDate,
           appointmentTime: effectiveTime,
-          duration: duration || appointment.duration,
+          duration: effectiveDuration,
           excludeAppointmentId: id
         });
 
@@ -607,9 +631,10 @@ const appointmentController = {
       const updateData = {};
       if (patient_id) updateData.patient_id = patient_id;
       if (dentist_id) updateData.dentist_id = dentist_id;
+      if (treatment_id) updateData.treatment_id = treatment_id;
       if (appointment_date) updateData.appointment_date = appointment_date;
       if (appointment_time) updateData.appointment_time = appointment_time;
-      if (duration) updateData.duration = duration;
+      if (duration || selectedTreatment) updateData.duration = effectiveDuration;
       if (notes !== undefined) updateData.notes = notes;
       if (status) updateData.status = status;
 
@@ -632,6 +657,8 @@ const appointmentController = {
           }
         ]
       });
+
+      await syncReminderForAppointment(updatedAppointment);
 
       return res.status(200).json({
         message: 'Termini u përditësua me sukses.',

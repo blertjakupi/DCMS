@@ -61,7 +61,7 @@ function PatientNavbar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-4 text-primary">
-          <button className="hover:opacity-80 transition-opacity">
+          <button className="hover:opacity-80 transition-opacity" onClick={() => navigate('/patient/appointments')} title="Appointment reminders">
             <span className="material-symbols-outlined">notifications</span>
           </button>
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyForm = {
   patient_id: '',
@@ -54,9 +55,6 @@ function PatientsView() {
   const [saving, setSaving] = useState(false);
   const [dentists, setDentists] = useState([]);
   const [patientAppointments, setPatientAppointments] = useState([]);
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   
   useEffect(() => {
@@ -213,17 +211,7 @@ function PatientsView() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">

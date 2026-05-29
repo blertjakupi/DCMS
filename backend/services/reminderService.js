@@ -1,20 +1,41 @@
 const { Op } = require('sequelize');
-const { Reminder, Appointment, Patient, User } = require('../models');
+const { Reminder, Appointment, Patient, Dentist, Treatment } = require('../models');
+
+const APPOINTMENT_REMINDER_TYPE = 'APPOINTMENT_24H';
+
+const combineAppointmentDateTime = (appointment) => {
+  return new Date(`${appointment.appointment_date}T${String(appointment.appointment_time).slice(0, 8)}`);
+};
+
+const getAppointmentReminderTime = (appointment) => {
+  const appointmentDateTime = combineAppointmentDateTime(appointment);
+  const sendAt = new Date(appointmentDateTime);
+  sendAt.setHours(sendAt.getHours() - 24);
+  return sendAt;
+};
 
 const createReminderForAppointment = async (appointment) => {
   try {
-    const appointmentDateTime = new Date(
-      `${appointment.appointment_date}T${appointment.appointment_time}`
-    );
+    const sendAt = getAppointmentReminderTime(appointment);
 
-    const sendAt = new Date(appointmentDateTime);
-    sendAt.setHours(sendAt.getHours() - 24);
+    const [reminder] = await Reminder.findOrCreate({
+      where: {
+        appointment_id: appointment.appointment_id,
+        type: APPOINTMENT_REMINDER_TYPE
+      },
+      defaults: {
+        type: APPOINTMENT_REMINDER_TYPE,
+        send_at: sendAt,
+        status: 'Pending',
+        appointment_id: appointment.appointment_id,
+        patient_id: appointment.patient_id
+      }
+    });
 
-    const reminder = await Reminder.create({
-      type: 'APPOINTMENT_REMINDER',
+    await reminder.update({
       send_at: sendAt,
+      sent_date: null,
       status: 'Pending',
-      appointment_id: appointment.appointment_id,
       patient_id: appointment.patient_id
     });
 
@@ -23,6 +44,29 @@ const createReminderForAppointment = async (appointment) => {
     console.error('CREATE REMINDER ERROR:', error);
     throw new Error('Failed to create reminder');
   }
+};
+
+const syncReminderForAppointment = async (appointment) => {
+  if (!appointment || appointment.status !== 'Scheduled') {
+    return null;
+  }
+
+  return createReminderForAppointment(appointment);
+};
+
+const syncRemindersForAppointments = async (where = {}) => {
+  const appointments = await Appointment.findAll({
+    where: {
+      status: 'Scheduled',
+      ...where
+    }
+  });
+
+  for (const appointment of appointments) {
+    await syncReminderForAppointment(appointment);
+  }
+
+  return appointments.length;
 };
 
 const getDueReminders = async () => {
@@ -37,7 +81,12 @@ const getDueReminders = async () => {
     },
     include: [
       {
-        model: Appointment
+        model: Appointment,
+        include: [
+          { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
+          { model: Dentist, attributes: ['dentist_id', 'first_name', 'last_name'] },
+          { model: Treatment, attributes: ['treatment_id', 'treatment_name'] }
+        ]
       }
     ]
   });
@@ -99,7 +148,11 @@ const processDueReminders = async () => {
 };
 
 module.exports = {
+  APPOINTMENT_REMINDER_TYPE,
+  getAppointmentReminderTime,
   createReminderForAppointment,
+  syncReminderForAppointment,
+  syncRemindersForAppointments,
   getDueReminders,
   sendReminder,
   markAsSent,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyForm = {
   first_name: '',
@@ -49,12 +50,11 @@ function PatientsManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [viewPatient, setViewPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -89,7 +89,10 @@ function PatientsManagement() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setQuickAddOpen(false);
+      if (event.key === 'Escape') {
+        setQuickAddOpen(false);
+        setViewPatient(null);
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -155,19 +158,41 @@ function PatientsManagement() {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setQuickAddOpen(true);
+  };
+
+  const openEdit = (patient) => {
+    setEditingId(patient.patient_id);
+    setForm({
+      first_name: patient.first_name || '',
+      last_name: patient.last_name || '',
+      email: patient.email || patient.User?.email || '',
+      password: '',
+      phone_number: patient.phone || patient.User?.phone_number || '',
+      birth_date: patient.birth_date || '',
+      address: patient.address || '',
+      allergies: patient.allergies || '',
+    });
+    setQuickAddOpen(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
 
     try {
-      const response = await fetch('/api/patients', {
-        method: 'POST',
+      const response = await fetch(editingId ? `/api/patients/${editingId}` : '/api/patients', {
+        method: editingId ? 'PUT' : 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           ...form,
           phone: form.phone_number,
           status: 'Active',
+          ...(editingId ? { password: undefined } : {}),
         }),
       });
       const json = await response.json();
@@ -175,6 +200,7 @@ function PatientsManagement() {
       if (!response.ok) throw new Error(json.message || 'Patient could not be created.');
 
       setForm(emptyForm);
+      setEditingId(null);
       setQuickAddOpen(false);
       await loadData();
     } catch (err) {
@@ -220,17 +246,7 @@ function PatientsManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
@@ -245,7 +261,7 @@ function PatientsManagement() {
           </div>
           <button
             className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-            onClick={() => setQuickAddOpen(true)}
+            onClick={openCreate}
           >
             <span className="material-symbols-outlined">person_add</span>
             Add New Patient
@@ -371,10 +387,18 @@ function PatientsManagement() {
                         </td>
                         <td className="px-gutter py-md text-right">
                           <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="View">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="View"
+                              onClick={() => setViewPatient(patient)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">visibility</span>
                             </button>
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Edit"
+                              onClick={() => openEdit(patient)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
                             <button
@@ -406,7 +430,11 @@ function PatientsManagement() {
         className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           quickAddOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setQuickAddOpen(false)}
+        onClick={() => {
+          setQuickAddOpen(false);
+          setEditingId(null);
+          setForm(emptyForm);
+        }}
       >
         <form
           className={`fixed right-0 top-0 h-screen w-full max-w-md bg-surface-container-lowest shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
@@ -416,8 +444,12 @@ function PatientsManagement() {
           onSubmit={handleSubmit}
         >
           <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
-            <h3 className="text-headline-md font-headline-md text-primary">New Patient</h3>
-            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setQuickAddOpen(false)}>
+            <h3 className="text-headline-md font-headline-md text-primary">{editingId ? 'Edit Patient' : 'New Patient'}</h3>
+            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -449,10 +481,12 @@ function PatientsManagement() {
               <input className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base" placeholder="email@example.com" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} required />
             </div>
 
+            {!editingId && (
             <div className="space-y-unit">
               <label className="font-label-bold text-on-surface-variant text-caption">Temporary Password</label>
               <input className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base" placeholder="At least 8 characters" type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} minLength="8" required />
             </div>
+            )}
 
             <div className="space-y-unit">
               <label className="font-label-bold text-on-surface-variant text-caption">Address</label>
@@ -475,15 +509,48 @@ function PatientsManagement() {
           </div>
 
           <div className="p-gutter border-t border-outline-variant/30 flex gap-md">
-            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => setQuickAddOpen(false)}>
+            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               Cancel
             </button>
             <button className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-label-bold hover:bg-on-primary-fixed-variant transition-all shadow-md active:scale-95 disabled:opacity-60" type="submit" disabled={saving}>
-              {saving ? 'Adding...' : 'Add Patient'}
+              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Add Patient'}
             </button>
           </div>
         </form>
       </div>
+
+      {viewPatient && (
+        <div className="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewPatient(null)}>
+          <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+              <h3 className="text-headline-md font-headline-md text-primary">Patient Details</h3>
+              <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setViewPatient(null)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-gutter grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {[
+                ['Name', fullName(viewPatient)],
+                ['Email', viewPatient.email || viewPatient.User?.email || '-'],
+                ['Phone', viewPatient.phone || viewPatient.User?.phone_number || '-'],
+                ['Birth Date', formatDate(viewPatient.birth_date)],
+                ['Status', viewPatient.status || '-'],
+                ['Address', viewPatient.address || '-'],
+                ['Allergies / Notes', viewPatient.allergies || '-'],
+              ].map(([label, value]) => (
+                <div key={label} className={label === 'Allergies / Notes' || label === 'Address' ? 'sm:col-span-2' : ''}>
+                  <p className="text-caption font-label-bold text-on-surface-variant uppercase">{label}</p>
+                  <p className="text-body-base text-on-surface mt-1">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

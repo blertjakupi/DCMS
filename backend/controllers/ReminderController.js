@@ -2,17 +2,35 @@ const {
   Reminder,
   Appointment,
   Patient,
-  Dentist
+  Dentist,
+  Treatment
 } = require('../models');
+const { Op } = require('sequelize');
+const { syncRemindersForAppointments, APPOINTMENT_REMINDER_TYPE } = require('../services/reminderService');
 
 const VALID_STATUSES = ['Pending', 'Sent', 'Failed'];
+
+const toLocalDateOnly = (date = new Date()) => {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+};
 
 const getIncludeOptions = (appointmentWhere = {}) => [
   {
     model: Appointment,
-    attributes: ['appointment_id', 'appointment_date', 'appointment_time'],
+    attributes: ['appointment_id', 'appointment_date', 'appointment_time', 'status'],
     where: appointmentWhere,
-    required: Object.keys(appointmentWhere).length > 0
+    required: Object.keys(appointmentWhere).length > 0,
+    include: [
+      {
+        model: Dentist,
+        attributes: ['dentist_id', 'first_name', 'last_name']
+      },
+      {
+        model: Treatment,
+        attributes: ['treatment_id', 'treatment_name']
+      }
+    ]
   },
   {
     model: Patient,
@@ -38,6 +56,8 @@ const reminderController = {
         }
       }
 
+      await syncRemindersForAppointments(appointmentWhere);
+
       const reminders = await Reminder.findAll({
         include: getIncludeOptions(appointmentWhere),
         order: [['reminder_id', 'DESC']]
@@ -51,6 +71,79 @@ const reminderController = {
       console.error('GET ALL REMINDERS ERROR:', error);
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë marrjes së përkujtesave.'
+      });
+    }
+  },
+
+  getSummary: async (req, res) => {
+    try {
+      const userRole = req.user.role ? req.user.role.normalized_name.toUpperCase() : '';
+      const now = new Date();
+      const today = toLocalDateOnly(now);
+      let appointmentWhere = {};
+
+      if (userRole === 'DENTIST') {
+        const dentist = await Dentist.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
+        if (!dentist) return res.status(403).json({ message: 'Nuk keni akses.' });
+        appointmentWhere.dentist_id = dentist.dentist_id;
+      } else if (userRole === 'PATIENT') {
+        const patient = await Patient.findOne({ where: { user_id: req.user.user_id, is_deleted: false } });
+        if (!patient) return res.status(403).json({ message: 'Nuk keni akses.' });
+        appointmentWhere.patient_id = patient.patient_id;
+      } else if (userRole !== 'ADMIN' && userRole !== 'RECEPTIONIST') {
+        return res.status(403).json({ message: 'Nuk keni akses.' });
+      }
+
+      await syncRemindersForAppointments(appointmentWhere);
+
+      const dueReminders = await Reminder.findAll({
+        where: {
+          type: APPOINTMENT_REMINDER_TYPE,
+          status: 'Pending',
+          send_at: { [Op.lte]: now }
+        },
+        include: getIncludeOptions(appointmentWhere),
+        order: [['send_at', 'ASC']]
+      });
+
+      const todayAppointments = await Appointment.findAll({
+        where: {
+          ...appointmentWhere,
+          appointment_date: today,
+          status: { [Op.in]: ['Scheduled', 'Completed', 'No-Show'] }
+        },
+        include: [
+          { model: Patient, attributes: ['patient_id', 'first_name', 'last_name'] },
+          { model: Dentist, attributes: ['dentist_id', 'first_name', 'last_name'] },
+          { model: Treatment, attributes: ['treatment_id', 'treatment_name'] }
+        ],
+        order: [['appointment_time', 'ASC']]
+      });
+
+      return res.status(200).json({
+        message: 'Përmbledhja e përkujtesave u mor me sukses.',
+        data: {
+          dueReminders,
+          todayAppointmentCount: todayAppointments.length,
+          todayAppointments,
+          security: [
+            {
+              type: 'SECURITY_PASSWORD',
+              title: 'Siguria e llogarisë',
+              message: 'Ndrysho password-in periodikisht dhe mos e ndaj me persona të tjerë.'
+            },
+            {
+              type: 'SECURITY_SESSION',
+              title: 'Kontroll i aksesit',
+              message: 'Nëse dyshon për qasje të paautorizuar, ndrysho password-in menjëherë.'
+            }
+          ]
+        }
+      });
+    } catch (error) {
+      console.error('GET REMINDER SUMMARY ERROR:', error);
+      return res.status(500).json({
+        message: 'Gabim i brendshëm gjatë marrjes së përmbledhjes së përkujtesave.'
       });
     }
   },

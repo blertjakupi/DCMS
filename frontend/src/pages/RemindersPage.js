@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const statuses = ['Pending', 'Sent', 'Failed'];
 
@@ -43,6 +44,16 @@ function formatDateTime(value) {
   });
 }
 
+function appointmentLabel(appointment) {
+  if (!appointment) return 'Appointment';
+  const patient = appointment.Patient;
+  const dentist = appointment.Dentist;
+  const treatment = appointment.Treatment?.treatment_name || 'Treatment';
+  const patientLabel = patient ? `${patient.first_name} ${patient.last_name}` : 'Patient';
+  const dentistLabel = dentist ? `Dr. ${dentist.first_name} ${dentist.last_name}` : 'Dentist';
+  return `${patientLabel} with ${dentistLabel} - ${treatment}`;
+}
+
 function toDateTimeLocal(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -53,11 +64,8 @@ function toDateTimeLocal(value) {
 
 function RemindersPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const SidebarComponent = location.pathname.startsWith('/dentist') ? DentistSidebar : AdminSidebar;
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'AD';
 
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,6 +82,20 @@ function RemindersPage() {
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [summary, setSummary] = useState({
+    dueReminders: [],
+    todayAppointmentCount: 0,
+    todayAppointments: [],
+    security: [],
+  });
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
 
   const fetchReminders = useCallback(async () => {
     setLoading(true);
@@ -88,6 +110,19 @@ function RemindersPage() {
       }
       const json = await res.json();
       setReminders(json.data || []);
+
+      const summaryRes = await fetch('/api/reminders/summary', {
+        headers: authHeaders(),
+      });
+      if (summaryRes.ok) {
+        const summaryJson = await summaryRes.json();
+        setSummary(summaryJson.data || {
+          dueReminders: [],
+          todayAppointmentCount: 0,
+          todayAppointments: [],
+          security: [],
+        });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -178,6 +213,47 @@ function RemindersPage() {
     }
   };
 
+  const changePassword = async () => {
+    setPasswordSaving(true);
+    setPasswordMessage('');
+    setError('');
+    try {
+      if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+        throw new Error('All password fields are required.');
+      }
+      if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+        throw new Error('New password and confirmation do not match.');
+      }
+
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          current_password: passwordForm.currentPassword,
+          new_password: passwordForm.newPassword,
+          confirm_password: passwordForm.confirmPassword,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.message || 'Failed to change password.');
+      }
+
+      setPasswordMessage(json.message || 'Password changed successfully. Please sign in again.');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        navigate('/login');
+      }, 1200);
+    } catch (err) {
+      setPasswordMessage(err.message);
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   return (
     <div className="font-body-base text-body-base text-on-background h-screen overflow-hidden flex">
       <SidebarComponent />
@@ -191,23 +267,12 @@ function RemindersPage() {
                 className="bg-transparent border-none focus:ring-0 text-[15px] text-on-surface w-full placeholder:text-outline p-0 focus:outline-none"
                 placeholder="Search patients, dentists, or records..."
                 type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
           </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
-            </button>
-            <button className="p-1 rounded-full hover:bg-surface-container-highest transition-colors">
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[14px] font-semibold">
-                {initials}
-              </div>
-            </button>
-          </div>
+          <HeaderActions />
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 mt-16 pb-24 md:pb-6 bg-background">
@@ -225,6 +290,68 @@ function RemindersPage() {
                 </button>
               </div>
             )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <section className="bg-surface border border-outline-variant/20 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-semibold uppercase text-on-surface-variant">Due Notifications</p>
+                    <h3 className="text-[28px] font-bold text-on-surface mt-1">{summary.dueReminders?.length || 0}</h3>
+                  </div>
+                  <span className="material-symbols-outlined text-primary text-[34px]">notifications_active</span>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  {(summary.dueReminders || []).slice(0, 2).map(reminder => (
+                    <div key={reminder.reminder_id} className="text-[13px] text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+                      Tomorrow reminder: {appointmentLabel(reminder.Appointment)}
+                    </div>
+                  ))}
+                  {(summary.dueReminders || []).length === 0 && (
+                    <p className="text-[13px] text-on-surface-variant">No appointment reminders are due right now.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="bg-surface border border-outline-variant/20 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-semibold uppercase text-on-surface-variant">Today's Appointments</p>
+                    <h3 className="text-[28px] font-bold text-on-surface mt-1">{summary.todayAppointmentCount || 0}</h3>
+                  </div>
+                  <span className="material-symbols-outlined text-tertiary text-[34px]">event_available</span>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  {(summary.todayAppointments || []).slice(0, 2).map(appointment => (
+                    <div key={appointment.appointment_id} className="text-[13px] text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+                      {String(appointment.appointment_time || '').slice(0, 5)} - {appointmentLabel(appointment)}
+                    </div>
+                  ))}
+                  {(summary.todayAppointments || []).length === 0 && (
+                    <p className="text-[13px] text-on-surface-variant">No appointments scheduled for today.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="bg-surface border border-outline-variant/20 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-semibold uppercase text-on-surface-variant">Security</p>
+                    <h3 className="text-[18px] font-bold text-on-surface mt-2">Password protection</h3>
+                  </div>
+                  <span className="material-symbols-outlined text-error text-[34px]">shield_lock</span>
+                </div>
+                <p className="text-[13px] text-on-surface-variant mt-3">
+                  Change your password when needed by confirming the current one first.
+                </p>
+                <button
+                  onClick={() => setPasswordModalOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-semibold hover:bg-[#005049] transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[18px]">password</span>
+                  Change Password
+                </button>
+              </section>
+            </div>
 
             <div className="bg-surface-container-lowest rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-outline-variant/20 overflow-hidden flex flex-col">
               <div className="p-4 border-b border-outline-variant/20 flex flex-col sm:flex-row gap-4 items-center justify-between bg-surface">
@@ -413,6 +540,37 @@ function RemindersPage() {
                 className="px-6 py-2 rounded-lg bg-primary text-on-primary text-[14px] font-semibold hover:bg-[#005049] transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-lg border border-outline-variant/20 flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center">
+              <h3 className="text-[24px] font-semibold text-on-surface">Change Password</h3>
+              <button onClick={() => setPasswordModalOpen(false)} className="text-on-surface-variant hover:text-error transition-colors">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              {passwordMessage && (
+                <div className="p-3 rounded-lg bg-surface-container-low text-[13px] text-on-surface-variant border border-outline-variant/30">
+                  {passwordMessage}
+                </div>
+              )}
+              <input className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg p-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-[15px]" type="password" placeholder="Current password" value={passwordForm.currentPassword} onChange={e => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))} />
+              <input className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg p-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-[15px]" type="password" placeholder="New password" value={passwordForm.newPassword} onChange={e => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))} />
+              <input className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg p-3 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-[15px]" type="password" placeholder="Confirm new password" value={passwordForm.confirmPassword} onChange={e => setPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))} />
+            </div>
+            <div className="p-6 bg-surface border-t border-outline-variant/20 flex justify-end gap-3">
+              <button onClick={() => setPasswordModalOpen(false)} disabled={passwordSaving} className="px-6 py-2 rounded-lg border border-outline text-on-surface text-[14px] font-semibold hover:bg-surface-variant/50 transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={changePassword} disabled={passwordSaving} className="px-6 py-2 rounded-lg bg-primary text-on-primary text-[14px] font-semibold hover:bg-[#005049] transition-colors disabled:opacity-50">
+                {passwordSaving ? 'Saving...' : 'Save Password'}
               </button>
             </div>
           </div>

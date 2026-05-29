@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const navItems = [
+const adminNavItems = [
   { icon: 'dashboard', label: 'Dashboard', path: '/admin/dashboard' },
   { icon: 'calendar_month', label: 'Appointments', path: '/admin/appointments' },
   { icon: 'groups', label: 'Patients', path: '/admin/patients' },
@@ -12,6 +12,14 @@ const navItems = [
   { icon: 'notifications_active', label: 'Reminders', path: '/admin/reminders' },
 ];
 
+const receptionistNavItems = [
+  { icon: 'dashboard', label: 'Dashboard', path: '/receptionist/dashboard' },
+  { icon: 'calendar_month', label: 'Appointments', path: '/admin/appointments' },
+  { icon: 'groups', label: 'Patients', path: '/admin/patients' },
+  { icon: 'receipt_long', label: 'Billing & Invoices', path: '/admin/billing' },
+  { icon: 'notifications_active', label: 'Reminders', path: '/admin/reminders' },
+];
+
 const adminItems = [
   { icon: 'manage_accounts', label: 'User Management' },
   { icon: 'settings_system_daydream', label: 'System Settings' },
@@ -20,6 +28,10 @@ const adminItems = [
 function AdminSidebar() {
   const navigate = useNavigate();
   const location = useLocation(); 
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const role = user.roles?.[0];
+  const isReceptionist = role === 'RECEPTIONIST';
+  const navItems = isReceptionist ? receptionistNavItems : adminNavItems;
 
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
@@ -57,6 +69,7 @@ function AdminSidebar() {
   );
 })}
 
+        {!isReceptionist && (
         <div className="pt-4 pb-2">
           <p className="px-4 text-[12px] text-outline mb-2 uppercase tracking-wider">Administration</p>
           {adminItems.map((item) => {
@@ -78,13 +91,14 @@ function AdminSidebar() {
   );
 })}
         </div>
+        )}
       </div>
 
       <div className="mt-auto pt-4 border-t border-surface-variant space-y-1">
-        <a href="#" className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200">
+        <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200">
           <span className="material-symbols-outlined">help</span>
           <span>Support</span>
-        </a>
+        </button>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-error hover:bg-error-container rounded-lg transition-colors duration-200"

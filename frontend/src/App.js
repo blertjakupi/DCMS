@@ -3,6 +3,7 @@ import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ReceptionistDashboard from './pages/ReceptionistDashboard';
 import PatientPortal from './pages/PatientPortal';
 import PatientAppointments from './pages/PatientAppointments';
 import PatientMyRecords from './pages/PatientMyRecords';
@@ -83,6 +84,14 @@ function App() {
           element={
             <PrivateRoute allowedRoles={['DENTIST']}>
               <RemindersPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/receptionist/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['RECEPTIONIST']}>
+              <ReceptionistDashboard />
             </PrivateRoute>
           }
         />

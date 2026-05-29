@@ -7,6 +7,7 @@ const {
   User,
   Role,
   RefreshToken,
+  UserToken,
   Patient,
   Dentist
 } = require('../models');
@@ -20,9 +21,26 @@ if (!ACCESS_TOKEN_SECRET || !REFRESH_TOKEN_SECRET) {
 
 
 const DEFAULT_ROLE_NORMALIZED_NAME = 'PATIENT';
+const RESET_PASSWORD_PROVIDER = 'LOCAL';
+const RESET_PASSWORD_TOKEN_NAME = 'PASSWORD_RESET';
+const RESET_PASSWORD_TOKEN_MINUTES = 30;
 
 const hashToken = (token) => {
   return crypto.createHash('sha256').update(token).digest('hex');
+};
+
+const normalizePhone = (value) => String(value || '').replace(/\D/g, '');
+
+const phonesMatch = (...values) => {
+  const [inputPhone, ...storedPhones] = values.map(normalizePhone);
+  if (!inputPhone) return false;
+
+  return storedPhones.some((storedPhone) => {
+    if (!storedPhone) return false;
+    return storedPhone === inputPhone ||
+      storedPhone.endsWith(inputPhone) ||
+      inputPhone.endsWith(storedPhone);
+  });
 };
 
 const createAccessToken = (user) => {
@@ -44,6 +62,45 @@ const createRefreshToken = (user) => {
     REFRESH_TOKEN_SECRET,
     { expiresIn: '7d' }
   );
+};
+
+const createPasswordResetToken = async (user) => {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + RESET_PASSWORD_TOKEN_MINUTES * 60 * 1000);
+  const tokenValue = JSON.stringify({
+    tokenHash,
+    expiresAt: expiresAt.toISOString()
+  });
+
+  const existingToken = await UserToken.findOne({
+    where: {
+      user_id: user.user_id,
+      login_provider: RESET_PASSWORD_PROVIDER,
+      token_name: RESET_PASSWORD_TOKEN_NAME
+    }
+  });
+
+  if (existingToken) {
+    await existingToken.update({ token_value: tokenValue });
+  } else {
+    await UserToken.create({
+      user_id: user.user_id,
+      login_provider: RESET_PASSWORD_PROVIDER,
+      token_name: RESET_PASSWORD_TOKEN_NAME,
+      token_value: tokenValue
+    });
+  }
+
+  return { rawToken, expiresAt };
+};
+
+const parsePasswordResetToken = (tokenRecord) => {
+  try {
+    return JSON.parse(tokenRecord.token_value);
+  } catch (error) {
+    return null;
+  }
 };
 
 const authController = {
@@ -265,6 +322,182 @@ const authController = {
     }
   },
 
+  forgotPassword: async (req, res) => {
+    try {
+      const { email, phone_number, phone } = req.body;
+      const verificationPhone = phone_number || phone;
+
+      if (!email || !verificationPhone) {
+        return res.status(400).json({
+          message: 'Email dhe numri i telefonit jane te detyrueshem.'
+        });
+      }
+
+      const user = await User.findOne({
+        where: {
+          email,
+          is_deleted: false,
+          status: 'Active'
+        },
+        include: [
+          {
+            model: Patient,
+            required: false,
+            attributes: ['phone']
+          }
+        ]
+      });
+
+      if (!user) {
+        return res.status(200).json({
+          message: 'Nese te dhenat perputhen, do te krijohen udhezimet per reset password.'
+        });
+      }
+
+      const phoneIsVerified = phonesMatch(
+        verificationPhone,
+        user.phone_number,
+        user.Patient?.phone
+      );
+
+      if (!phoneIsVerified) {
+        return res.status(200).json({
+          message: 'Nese te dhenat perputhen, do te krijohen udhezimet per reset password.'
+        });
+      }
+
+      const reset = await createPasswordResetToken(user);
+      const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${reset.rawToken}`;
+
+      return res.status(200).json({
+        message: 'Te dhenat u verifikuan. Mund te vazhdoni me reset password.',
+        ...(process.env.NODE_ENV !== 'production'
+          ? {
+              resetToken: reset.rawToken,
+              resetUrl,
+              expiresAt: reset.expiresAt
+            }
+          : {})
+      });
+    } catch (error) {
+      console.error('FORGOT PASSWORD ERROR:', error);
+      return res.status(500).json({
+        message: 'Gabim i brendshem gjate procesit te forgot password.'
+      });
+    }
+  },
+
+  resetPassword: async (req, res) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const { token, new_password, newPassword, confirm_password, confirmPassword } = req.body;
+      const nextPassword = new_password || newPassword;
+      const confirmPasswordValue = confirm_password || confirmPassword;
+
+      if (!token || !nextPassword || !confirmPasswordValue) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Token, new_password dhe confirm_password jane te detyrueshme.'
+        });
+      }
+
+      if (nextPassword.length < 8) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Password i ri duhet te kete te pakten 8 karaktere.'
+        });
+      }
+
+      if (nextPassword !== confirmPasswordValue) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: 'Password i ri dhe konfirmimi nuk perputhen.'
+        });
+      }
+
+      const tokenHash = hashToken(token);
+      const resetTokens = await UserToken.findAll({
+        where: {
+          login_provider: RESET_PASSWORD_PROVIDER,
+          token_name: RESET_PASSWORD_TOKEN_NAME
+        },
+        transaction
+      });
+
+      let matchedToken = null;
+      let parsedToken = null;
+
+      for (const tokenRecord of resetTokens) {
+        const parsed = parsePasswordResetToken(tokenRecord);
+        if (parsed?.tokenHash === tokenHash) {
+          matchedToken = tokenRecord;
+          parsedToken = parsed;
+          break;
+        }
+      }
+
+      if (!matchedToken || !parsedToken) {
+        await transaction.rollback();
+        return res.status(400).json({ message: 'Token i reset password nuk eshte valid.' });
+      }
+
+      if (new Date(parsedToken.expiresAt) < new Date()) {
+        await matchedToken.destroy({ transaction });
+        await transaction.commit();
+        return res.status(400).json({ message: 'Token i reset password ka skaduar.' });
+      }
+
+      const user = await User.findOne({
+        where: {
+          user_id: matchedToken.user_id,
+          is_deleted: false,
+          status: 'Active'
+        },
+        transaction
+      });
+
+      if (!user) {
+        await transaction.rollback();
+        return res.status(404).json({ message: 'Perdoruesi nuk u gjet ose nuk eshte aktiv.' });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const password_hash = await bcrypt.hash(nextPassword, salt);
+
+      await user.update({
+        password_hash,
+        access_failed_count: 0,
+        lockout_enabled: false
+      }, { transaction });
+
+      await matchedToken.destroy({ transaction });
+
+      await RefreshToken.update(
+        { revoked_at: new Date() },
+        {
+          where: {
+            user_id: user.user_id,
+            revoked_at: null
+          },
+          transaction
+        }
+      );
+
+      await transaction.commit();
+
+      return res.status(200).json({
+        message: 'Password-i u resetua me sukses. Tani mund te kyqeni me password-in e ri.'
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error('RESET PASSWORD ERROR:', error);
+      return res.status(500).json({
+        message: 'Gabim i brendshem gjate resetimit te password-it.'
+      });
+    }
+  },
+
   refreshToken: async (req, res) => {
     try {
       const { token } = req.body;
@@ -386,6 +619,86 @@ const authController = {
       console.error('LOGOUT ERROR:', error);
       return res.status(500).json({
         message: 'Gabim i brendshëm gjatë logout.'
+      });
+    }
+  },
+
+  changePassword: async (req, res) => {
+    try {
+      const { current_password, currentPassword, new_password, newPassword, confirm_password, confirmPassword } = req.body;
+      const oldPassword = current_password || currentPassword;
+      const nextPassword = new_password || newPassword;
+      const confirmPasswordValue = confirm_password || confirmPassword;
+
+      if (!oldPassword || !nextPassword || !confirmPasswordValue) {
+        return res.status(400).json({
+          message: 'Fushat current_password, new_password dhe confirm_password jane te detyrueshme.'
+        });
+      }
+
+      if (nextPassword.length < 8) {
+        return res.status(400).json({
+          message: 'Password i ri duhet te kete te pakten 8 karaktere.'
+        });
+      }
+
+      if (nextPassword !== confirmPasswordValue) {
+        return res.status(400).json({
+          message: 'Password i ri dhe konfirmimi nuk perputhen.'
+        });
+      }
+
+      if (oldPassword === nextPassword) {
+        return res.status(400).json({
+          message: 'Password i ri duhet te jete ndryshe nga password-i aktual.'
+        });
+      }
+
+      const user = await User.findOne({
+        where: {
+          user_id: req.user.user_id,
+          is_deleted: false,
+          status: 'Active'
+        }
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: 'Perdoruesi nuk u gjet.' });
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({
+          message: 'Password-i aktual nuk eshte i sakte.'
+        });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const password_hash = await bcrypt.hash(nextPassword, salt);
+
+      await user.update({
+        password_hash,
+        access_failed_count: 0,
+        lockout_enabled: false
+      });
+
+      await RefreshToken.update(
+        { revoked_at: new Date() },
+        {
+          where: {
+            user_id: user.user_id,
+            revoked_at: null
+          }
+        }
+      );
+
+      return res.status(200).json({
+        message: 'Password-i u ndryshua me sukses. Ju lutemi kyquni perseri.'
+      });
+    } catch (error) {
+      console.error('CHANGE PASSWORD ERROR:', error);
+      return res.status(500).json({
+        message: 'Gabim i brendshem gjate ndryshimit te password-it.'
       });
     }
   }

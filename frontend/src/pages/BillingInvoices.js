@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyInvoiceForm = {
   patient_id: '',
@@ -21,15 +22,6 @@ const authHeaders = () => ({
 
 const fullName = (item) =>
   [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
-
-const initials = (name) =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'AD';
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -62,14 +54,12 @@ function BillingInvoices() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [viewInvoice, setViewInvoice] = useState(null);
   const [invoiceForm, setInvoiceForm] = useState(emptyInvoiceForm);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -115,6 +105,7 @@ function BillingInvoices() {
       if (event.key === 'Escape') {
         setInvoiceOpen(false);
         setPaymentOpen(false);
+        setViewInvoice(null);
       }
     };
 
@@ -264,6 +255,39 @@ function BillingInvoices() {
     }
   };
 
+  const downloadInvoice = (invoice) => {
+    const patientName = fullName(invoice.Patient);
+    const paidAmount = paymentTotals[invoice.invoice_id] || 0;
+    const balance = Math.max(Number(invoice.total_amount || 0) - paidAmount, 0);
+    const items = (invoice.InvoiceItems || [])
+      .map((item) => `- ${item.Treatment?.treatment_name || `Treatment #${item.treatment_id}`}: ${formatCurrency(item.price)} x ${item.quantity || 1}`)
+      .join('\n') || '- No line items';
+
+    const content = [
+      `Invoice #INV-${invoice.invoice_id}`,
+      `Patient: ${patientName}`,
+      `Date: ${formatDate(invoice.invoice_date)}`,
+      `Status: ${invoice.status}`,
+      '',
+      'Items:',
+      items,
+      '',
+      `Total: ${formatCurrency(invoice.total_amount)}`,
+      `Paid: ${formatCurrency(paidAmount)}`,
+      `Balance: ${formatCurrency(balance)}`,
+    ].join('\n');
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `invoice-${invoice.invoice_id}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-background font-body-base text-body-base text-on-background min-h-screen overflow-x-hidden">
       <AdminSidebar />
@@ -282,17 +306,7 @@ function BillingInvoices() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
@@ -424,7 +438,18 @@ function BillingInvoices() {
                         </td>
                         <td className="px-gutter py-md text-right">
                           <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Download">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="View"
+                              onClick={() => setViewInvoice(invoice)}
+                            >
+                              <span className="material-symbols-outlined text-[20px]">visibility</span>
+                            </button>
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Download"
+                              onClick={() => downloadInvoice(invoice)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">download</span>
                             </button>
                             <button
@@ -626,6 +651,48 @@ function BillingInvoices() {
           </div>
         </form>
       </div>
+
+      {viewInvoice && (
+        <div className="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewInvoice(null)}>
+          <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+              <h3 className="text-headline-md font-headline-md text-primary">Invoice Details</h3>
+              <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setViewInvoice(null)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-gutter grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {[
+                ['Invoice', `#INV-${viewInvoice.invoice_id}`],
+                ['Patient', fullName(viewInvoice.Patient)],
+                ['Date', formatDate(viewInvoice.invoice_date)],
+                ['Status', viewInvoice.status],
+                ['Total', formatCurrency(viewInvoice.total_amount)],
+                ['Paid', formatCurrency(paymentTotals[viewInvoice.invoice_id] || 0)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-caption font-label-bold text-on-surface-variant uppercase">{label}</p>
+                  <p className="text-body-base text-on-surface mt-1">{value}</p>
+                </div>
+              ))}
+              <div className="sm:col-span-2">
+                <p className="text-caption font-label-bold text-on-surface-variant uppercase">Items</p>
+                <div className="mt-2 space-y-2">
+                  {(viewInvoice.InvoiceItems || []).length === 0 ? (
+                    <p className="text-body-base text-on-surface-variant">No line items.</p>
+                  ) : (
+                    viewInvoice.InvoiceItems.map((item) => (
+                      <div key={item.invoice_item_id} className="rounded-lg bg-surface-container-low p-3 text-body-base text-on-surface">
+                        {item.Treatment?.treatment_name || `Treatment #${item.treatment_id}`} - {formatCurrency(item.price)}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

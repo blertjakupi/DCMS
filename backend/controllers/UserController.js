@@ -298,9 +298,31 @@ if (role.normalized_name === 'DENTIST') {
       }
 
       await user.update(updateData, { transaction });
-	  
-	  const { Dentist } = require('../models');
 
+      if (status) {
+        await Patient.update(
+          { status },
+          { where: { user_id: id, is_deleted: false }, transaction }
+        );
+
+        await Dentist.update(
+          { status },
+          { where: { user_id: id, is_deleted: false }, transaction }
+        );
+
+        if (status === 'Inactive') {
+          await RefreshToken.update(
+            { revoked_at: new Date() },
+            {
+              where: {
+                user_id: id,
+                revoked_at: null
+              },
+              transaction
+            }
+          );
+        }
+      }
 if (role_id) {
   const newRole = await Role.findByPk(role_id, { transaction });
   if (newRole.normalized_name === 'DENTIST') {

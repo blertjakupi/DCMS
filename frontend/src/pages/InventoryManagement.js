@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const emptyForm = {
   item_name: '',
@@ -30,15 +31,6 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
   'Content-Type': 'application/json',
 });
-
-const initials = (name) =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || 'AD';
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -77,13 +69,12 @@ function InventoryManagement() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [viewItem, setViewItem] = useState(null);
   const [transactionForm, setTransactionForm] = useState(emptyTransactionForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInitials = user?.full_name ? initials(user.full_name) : 'AD';
 
   const loadData = async () => {
     setLoading(true);
@@ -118,7 +109,11 @@ function InventoryManagement() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setQuickAddOpen(false);
+      if (event.key === 'Escape') {
+        setQuickAddOpen(false);
+        setTransactionOpen(false);
+        setViewItem(null);
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -163,6 +158,30 @@ function InventoryManagement() {
     setTransactionForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setQuickAddOpen(true);
+  };
+
+  const openEdit = (item) => {
+    setEditingId(item.item_id);
+    setForm({
+      item_name: item.item_name || '',
+      description: item.description || '',
+      category: item.category || '',
+      unit: item.unit || '',
+      minimum_stock: item.minimum_stock ?? '',
+      expiry_date: item.expiry_date || '',
+      supplier_name: item.supplier_name || '',
+      batch_lot_number: item.batch_lot_number || '',
+      purchase_price: item.purchase_price ?? '',
+      storage_location: item.storage_location || '',
+      barcode: item.barcode || '',
+    });
+    setQuickAddOpen(true);
+  };
+
   const openTransactionModal = (item, type = 'IN') => {
     setTransactionForm({
       ...emptyTransactionForm,
@@ -179,8 +198,8 @@ function InventoryManagement() {
     setError('');
 
     try {
-      const response = await fetch('/api/inventory-items', {
-        method: 'POST',
+      const response = await fetch(editingId ? `/api/inventory-items/${editingId}` : '/api/inventory-items', {
+        method: editingId ? 'PUT' : 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           ...form,
@@ -195,6 +214,7 @@ function InventoryManagement() {
       if (!response.ok) throw new Error(json.message || 'Inventory item could not be created.');
 
       setForm(emptyForm);
+      setEditingId(null);
       setQuickAddOpen(false);
       await loadData();
     } catch (err) {
@@ -270,17 +290,7 @@ function InventoryManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-4">
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-          <button className="p-2 text-on-surface-variant hover:bg-surface-container-highest rounded-full transition-all">
-            <span className="material-symbols-outlined">notifications</span>
-          </button>
-          <div className="h-10 w-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-bold">
-            {userInitials}
-          </div>
-        </div>
+        <HeaderActions />
       </header>
 
       <main className="md:ml-64 pt-28 p-4 md:p-gutter min-h-screen">
@@ -295,7 +305,7 @@ function InventoryManagement() {
           </div>
           <button
             className="bg-primary text-on-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-label-bold shadow-lg hover:bg-on-primary-fixed-variant transition-all active:scale-[0.98]"
-            onClick={() => setQuickAddOpen(true)}
+            onClick={openCreate}
           >
             <span className="material-symbols-outlined">add</span>
             Add New Item
@@ -445,7 +455,18 @@ function InventoryManagement() {
                             >
                               <span className="material-symbols-outlined text-[20px]">add_shopping_cart</span>
                             </button>
-                            <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all" title="Edit">
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="View"
+                              onClick={() => setViewItem(item)}
+                            >
+                              <span className="material-symbols-outlined text-[20px]">visibility</span>
+                            </button>
+                            <button
+                              className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              title="Edit"
+                              onClick={() => openEdit(item)}
+                            >
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
                             <button
@@ -477,7 +498,11 @@ function InventoryManagement() {
         className={`fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 transition-opacity duration-300 ${
           quickAddOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setQuickAddOpen(false)}
+        onClick={() => {
+          setQuickAddOpen(false);
+          setEditingId(null);
+          setForm(emptyForm);
+        }}
       >
         <form
           className={`fixed right-0 top-0 h-screen w-full max-w-md bg-surface-container-lowest shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
@@ -487,8 +512,12 @@ function InventoryManagement() {
           onSubmit={handleSubmit}
         >
           <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
-            <h3 className="text-headline-md font-headline-md text-primary">New Item</h3>
-            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setQuickAddOpen(false)}>
+            <h3 className="text-headline-md font-headline-md text-primary">{editingId ? 'Edit Item' : 'New Item'}</h3>
+            <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -542,7 +571,7 @@ function InventoryManagement() {
                 <input
                   className="w-full px-4 py-3 rounded-xl bg-surface-container-high border-outline-variant border text-body-base text-on-surface-variant"
                   type="number"
-                  value="0"
+                  value={editingId ? (items.find((item) => item.item_id === editingId)?.quantity_in_stock || 0) : '0'}
                   readOnly
                 />
               </div>
@@ -650,11 +679,15 @@ function InventoryManagement() {
           </div>
 
           <div className="p-gutter border-t border-outline-variant/30 flex gap-md">
-            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => setQuickAddOpen(false)}>
+            <button className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-label-bold hover:bg-surface-container-low transition-colors" type="button" onClick={() => {
+              setQuickAddOpen(false);
+              setEditingId(null);
+              setForm(emptyForm);
+            }}>
               Cancel
             </button>
             <button className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-label-bold hover:bg-on-primary-fixed-variant transition-all shadow-md active:scale-95 disabled:opacity-60" type="submit" disabled={saving}>
-              {saving ? 'Adding...' : 'Add Item'}
+              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Add Item'}
             </button>
           </div>
         </form>
@@ -759,6 +792,41 @@ function InventoryManagement() {
           </div>
         </form>
       </div>
+
+      {viewItem && (
+        <div className="fixed inset-0 bg-on-surface/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewItem(null)}>
+          <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="p-gutter flex items-center justify-between border-b border-outline-variant/30">
+              <h3 className="text-headline-md font-headline-md text-primary">Inventory Item Details</h3>
+              <button className="p-2 hover:bg-surface-container-high rounded-full transition-all" type="button" onClick={() => setViewItem(null)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="p-gutter grid grid-cols-1 sm:grid-cols-2 gap-md">
+              {[
+                ['Item', viewItem.item_name],
+                ['Category', viewItem.category || '-'],
+                ['Unit', viewItem.unit],
+                ['Current Qty', viewItem.quantity_in_stock],
+                ['Minimum Stock', viewItem.minimum_stock],
+                ['Status', itemStatus(viewItem)],
+                ['Supplier', viewItem.supplier_name || '-'],
+                ['Batch / Lot', viewItem.batch_lot_number || '-'],
+                ['Purchase Price', viewItem.purchase_price || '-'],
+                ['Expiry Date', formatDate(viewItem.expiry_date)],
+                ['Storage Location', viewItem.storage_location || '-'],
+                ['Barcode / QR', viewItem.barcode || '-'],
+                ['Description', viewItem.description || '-'],
+              ].map(([label, value]) => (
+                <div key={label} className={label === 'Description' ? 'sm:col-span-2' : ''}>
+                  <p className="text-caption font-label-bold text-on-surface-variant uppercase">{label}</p>
+                  <p className="text-body-base text-on-surface mt-1">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

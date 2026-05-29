@@ -1,5 +1,7 @@
 import AdminSidebar from '../components/AdminSidebar';
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import HeaderActions from '../components/HeaderActions';
 
 const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -14,6 +16,122 @@ const formatDate = (value) => {
   return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+const toDateOnly = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
+
+const getMonthRange = (offset = 0) => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const end = offset === 0
+    ? now
+    : new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
+
+  return {
+    from: toDateOnly(start),
+    to: toDateOnly(end),
+  };
+};
+
+const isDateWithinRange = (value, range) => {
+  if (!value) return false;
+  const date = toDateOnly(new Date(value));
+  return date >= range.from && date <= range.to;
+};
+
+const getTrend = (current, previous, label = 'vs last month') => {
+  const currentValue = Number(current || 0);
+  const previousValue = Number(previous || 0);
+
+  if (previousValue === 0 && currentValue === 0) {
+    return {
+      text: `0% ${label}`,
+      icon: 'trending_flat',
+      color: 'text-on-surface-variant',
+    };
+  }
+
+  if (previousValue === 0) {
+    return {
+      text: `New growth ${label}`,
+      icon: 'trending_up',
+      color: 'text-primary',
+    };
+  }
+
+  const percent = ((currentValue - previousValue) / previousValue) * 100;
+  const formatted = `${percent > 0 ? '+' : ''}${percent.toFixed(1)}% ${label}`;
+
+  if (percent > 0) {
+    return { text: formatted, icon: 'trending_up', color: 'text-primary' };
+  }
+
+  if (percent < 0) {
+    return { text: formatted, icon: 'trending_down', color: 'text-error' };
+  }
+
+  return { text: formatted, icon: 'trending_flat', color: 'text-on-surface-variant' };
+};
+
+const getAppointmentDateTime = (appointment) => {
+  if (!appointment?.appointment_date || !appointment?.appointment_time) return null;
+  const time = String(appointment.appointment_time).slice(0, 5);
+  const dateTime = new Date(`${appointment.appointment_date}T${time}:00`);
+  return Number.isNaN(dateTime.getTime()) ? null : dateTime;
+};
+
+const getAppointmentTrend = (appointments) => {
+  if (!appointments.length) {
+    return {
+      text: 'No appointments today',
+      icon: 'event_busy',
+      color: 'text-on-surface-variant',
+    };
+  }
+
+  const now = new Date();
+  const nextAppointment = appointments
+    .map(getAppointmentDateTime)
+    .filter((date) => date && date >= now)
+    .sort((a, b) => a - b)[0];
+
+  if (!nextAppointment) {
+    return {
+      text: 'No upcoming appointments',
+      icon: 'event_available',
+      color: 'text-on-surface-variant',
+    };
+  }
+
+  const minutesUntil = Math.max(0, Math.round((nextAppointment - now) / 60000));
+
+  if (minutesUntil < 1) {
+    return {
+      text: 'Next appointment now',
+      icon: 'schedule',
+      color: 'text-primary',
+    };
+  }
+
+  if (minutesUntil < 60) {
+    return {
+      text: `Next in ${minutesUntil} min`,
+      icon: 'schedule',
+      color: 'text-primary',
+    };
+  }
+
+  const hours = Math.floor(minutesUntil / 60);
+  const minutes = minutesUntil % 60;
+
+  return {
+    text: `Next in ${hours}h${minutes ? ` ${minutes}m` : ''}`,
+    icon: 'schedule',
+    color: 'text-primary',
+  };
+};
+
 const initialsFromName = (name) => {
   if (!name) return '??';
   return name
@@ -26,6 +144,7 @@ const initialsFromName = (name) => {
 };
 
 function AdminDashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,21 +153,16 @@ function AdminDashboard() {
   const [revenueThisMonth, setRevenueThisMonth] = useState(0);
   const [activeDentists, setActiveDentists] = useState(0);
   const [appointmentsToday, setAppointmentsToday] = useState(0);
+  const [patientTrend, setPatientTrend] = useState(getTrend(0, 0, 'new vs last month'));
+  const [revenueTrend, setRevenueTrend] = useState(getTrend(0, 0));
+  const [appointmentTrend, setAppointmentTrend] = useState(getAppointmentTrend([]));
 
 
   const [recentUsers, setRecentUsers] = useState([]);
+  const [headerSearch, setHeaderSearch] = useState('');
 
   
   const [alerts, setAlerts] = useState([]);
-
-  
-  const getFirstDayOfMonth = () => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  };
-
-  
-  const getToday = () => new Date().toISOString().slice(0, 10);
 
  const loadDashboardData = useCallback(async () => {
   setLoading(true);
@@ -62,15 +176,21 @@ function AdminDashboard() {
       return json;
     };
 
+    const today = toDateOnly(new Date());
+    const currentMonth = getMonthRange();
+    const previousMonth = getMonthRange(-1);
+
     const results = await Promise.allSettled([
       fetchJson('/api/patients/count'),
       fetchJson('/api/dentists/count'),
-      fetchJson(`/api/appointments/count?date=${getToday()}&status=Scheduled`),
-      fetchJson(`/api/payments/sum?from=${getFirstDayOfMonth()}&to=${getToday()}`),
-      fetchJson('/api/users?limit=5&sort=-created_at'),
+      fetchJson(`/api/appointments/count?date=${today}&status=Scheduled`),
+      fetchJson(`/api/payments/sum?from=${currentMonth.from}&to=${currentMonth.to}`),
+      fetchJson('/api/users?limit=1000&sort=-created_at'),
       fetchJson('/api/inventory-items?limit=1000'),
       fetchJson('/api/invoices?limit=1000'),
       fetchJson('/api/reminders?limit=1000'),
+      fetchJson(`/api/payments/sum?from=${previousMonth.from}&to=${previousMonth.to}`),
+      fetchJson('/api/appointments'),
     ]);
 
     const getValue = (result, defaultValue) => result.status === 'fulfilled' ? result.value : defaultValue;
@@ -83,6 +203,8 @@ function AdminDashboard() {
     const inventoryData = getValue(results[5], { data: [] });
     const invoicesData = getValue(results[6], { data: [] });
     const remindersData = getValue(results[7], { data: [] });
+    const previousRevenueSum = getValue(results[8], { total: 0 });
+    const appointmentsData = getValue(results[9], { data: [] });
 
     setTotalPatients(patientCount.count);
     setActiveDentists(dentistCount.count);
@@ -90,7 +212,27 @@ function AdminDashboard() {
     setRevenueThisMonth(revenueSum.total);
 
     const users = usersData.data || [];
-    const registrations = users.map(user => ({
+    const patientUsers = users.filter((user) =>
+      (user.Role?.normalized_name || user.Role?.role_name || '').toUpperCase() === 'PATIENT'
+    );
+    const currentPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, currentMonth)).length;
+    const previousPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, previousMonth)).length;
+    const todayAppointments = (appointmentsData.data || [])
+      .filter((appointment) =>
+        appointment.appointment_date === today &&
+        appointment.status === 'Scheduled'
+      )
+      .sort((a, b) => {
+        const first = getAppointmentDateTime(a);
+        const second = getAppointmentDateTime(b);
+        return (first?.getTime() || 0) - (second?.getTime() || 0);
+      });
+
+    setPatientTrend(getTrend(currentPatientRegistrations, previousPatientRegistrations, 'new vs last month'));
+    setRevenueTrend(getTrend(revenueSum.total, previousRevenueSum.total));
+    setAppointmentTrend(getAppointmentTrend(todayAppointments));
+
+    const registrations = [...users].slice(0, 5).map(user => ({
       user_id: user.user_id,
       initials: initialsFromName(`${user.first_name} ${user.last_name}`),
       name: `${user.first_name} ${user.last_name}`,
@@ -113,6 +255,7 @@ function AdminDashboard() {
         title: 'Low Inventory Warning',
         desc: `${lowStockItems.length} item(s) low on stock. Reorder recommended.`,
         action: 'Order Now',
+        path: '/admin/inventory',
         actionColor: 'text-primary',
         bg: 'bg-surface-container-low border-surface-variant',
         iconBg: 'bg-secondary-container text-on-secondary-container',
@@ -120,7 +263,6 @@ function AdminDashboard() {
     }
 
     const invoices = invoicesData.data || [];
-    const today = getToday();
     const overdue = invoices.filter(inv => inv.status === 'Unpaid' && inv.invoice_date < today);
     if (overdue.length > 0) {
       alertsArray.push({
@@ -128,6 +270,7 @@ function AdminDashboard() {
         title: 'Overdue Invoice',
         desc: `${overdue.length} invoice(s) past due. Total: ${formatCurrency(overdue.reduce((s, i) => s + Number(i.total_amount), 0))}`,
         action: 'View Details',
+        path: '/admin/billing',
         actionColor: 'text-error',
         bg: 'bg-error-container/30 border-error-container',
         iconBg: 'bg-error-container text-error',
@@ -142,6 +285,7 @@ function AdminDashboard() {
         title: 'Failed Reminder Delivery',
         desc: `${failedReminders.length} reminder(s) failed to send. Check contact details.`,
         action: 'Update Contact',
+        path: '/admin/reminders',
         actionColor: 'text-primary',
         bg: 'bg-surface-container-low border-surface-variant',
         iconBg: 'bg-surface-container-highest text-on-surface-variant',
@@ -161,19 +305,22 @@ useEffect(() => {
   loadDashboardData();
 }, [loadDashboardData]); 
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'AD';
+  const filteredRecentUsers = recentUsers.filter((item) => {
+    const query = headerSearch.trim().toLowerCase();
+    return !query ||
+      item.name.toLowerCase().includes(query) ||
+      item.email.toLowerCase().includes(query) ||
+      item.role.toLowerCase().includes(query);
+  });
 
  
   const kpis = [
     {
       label: 'Total Patients',
       value: loading ? '...' : totalPatients.toLocaleString(),
-      trend: '+12% vs last month',
-      trendIcon: 'trending_up',
-      trendColor: 'text-primary',
+      trend: patientTrend.text,
+      trendIcon: patientTrend.icon,
+      trendColor: patientTrend.color,
       icon: 'groups',
       iconColor: 'text-primary',
       glowColor: 'bg-primary-container/20',
@@ -182,9 +329,9 @@ useEffect(() => {
     {
       label: 'Total Revenue This Month',
       value: loading ? '...' : formatCurrency(revenueThisMonth),
-      trend: '+8.4% vs last month',
-      trendIcon: 'trending_up',
-      trendColor: 'text-tertiary',
+      trend: revenueTrend.text,
+      trendIcon: revenueTrend.icon,
+      trendColor: revenueTrend.color,
       icon: 'account_balance_wallet',
       iconColor: 'text-tertiary',
       glowColor: 'bg-tertiary-container/20',
@@ -204,9 +351,9 @@ useEffect(() => {
     {
       label: 'Appointments Today',
       value: loading ? '...' : appointmentsToday,
-      trend: 'Next in 15 mins',
-      trendIcon: 'schedule',
-      trendColor: 'text-on-surface-variant',
+      trend: appointmentTrend.text,
+      trendIcon: appointmentTrend.icon,
+      trendColor: appointmentTrend.color,
       icon: 'event_available',
       iconColor: 'text-primary',
       glowColor: 'bg-primary-container/20',
@@ -229,23 +376,12 @@ useEffect(() => {
                 className="bg-transparent border-none focus:ring-0 text-[15px] text-on-surface w-full placeholder:text-outline p-0 focus:outline-none"
                 placeholder="Search patients, dentists, or records..."
                 type="text"
+                value={headerSearch}
+                onChange={(event) => setHeaderSearch(event.target.value)}
               />
             </div>
           </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
-            </button>
-            <button className="p-1 rounded-full hover:bg-surface-container-highest transition-colors">
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[14px] font-semibold">
-                {initials}
-              </div>
-            </button>
-          </div>
+          <HeaderActions />
         </header>
 
         {/* Main Canvas */}
@@ -287,7 +423,10 @@ useEffect(() => {
             <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-surface-variant overflow-hidden flex flex-col">
               <div className="p-6 border-b border-surface-variant flex justify-between items-center bg-surface">
                 <h3 className="text-[24px] font-semibold text-on-surface">Recent Registrations</h3>
-                <button className="text-primary hover:text-on-primary-fixed-variant text-[14px] font-semibold flex items-center gap-1 transition-colors">
+                <button
+                  className="text-primary hover:text-on-primary-fixed-variant text-[14px] font-semibold flex items-center gap-1 transition-colors"
+                  onClick={() => navigate('/admin/users')}
+                >
                   View All <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>
@@ -308,7 +447,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-variant text-[15px]">
-                      {recentUsers.map((user) => (
+                      {filteredRecentUsers.map((user) => (
                         <tr key={user.user_id} className="hover:bg-surface-container-low transition-colors">
                           <td className="p-4 font-semibold text-on-surface">
                             <div className="flex items-center gap-3">
@@ -331,16 +470,24 @@ useEffect(() => {
                             </span>
                           </td>
                           <td className="p-4 text-right space-x-2">
-                            <button className="text-outline hover:text-primary p-1 rounded hover:bg-surface-container-low transition-colors" title="Edit">
+                            <button
+                              className="text-outline hover:text-primary p-1 rounded hover:bg-surface-container-low transition-colors"
+                              title="Edit"
+                              onClick={() => navigate('/admin/users')}
+                            >
                               <span className="material-symbols-outlined text-[20px]">edit</span>
                             </button>
-                            <button className="text-outline hover:text-error p-1 rounded hover:bg-error-container transition-colors" title="Deactivate">
+                            <button
+                              className="text-outline hover:text-error p-1 rounded hover:bg-error-container transition-colors"
+                              title="Deactivate"
+                              onClick={() => navigate('/admin/users')}
+                            >
                               <span className="material-symbols-outlined text-[20px]">block</span>
                             </button>
                           </td>
                         </tr>
                       ))}
-                      {recentUsers.length === 0 && (
+                      {filteredRecentUsers.length === 0 && (
                         <tr>
                           <td colSpan="6" className="p-4 text-center text-on-surface-variant">No recent registrations</td>
                         </tr>
@@ -374,7 +521,10 @@ useEffect(() => {
                       <div>
                         <h4 className="text-[14px] font-semibold text-on-surface">{alert.title}</h4>
                         <p className="text-[12px] text-on-surface-variant mt-1">{alert.desc}</p>
-                        <button className={`mt-2 ${alert.actionColor} text-[12px] font-semibold hover:underline`}>
+                        <button
+                          className={`mt-2 ${alert.actionColor} text-[12px] font-semibold hover:underline`}
+                          onClick={() => navigate(alert.path)}
+                        >
                           {alert.action}
                         </button>
                       </div>

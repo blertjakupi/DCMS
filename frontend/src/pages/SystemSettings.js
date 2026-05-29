@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
+import HeaderActions from '../components/HeaderActions';
 
 const defaultSettings = {
   clinic_name: 'DentaCare Pro',
@@ -114,11 +115,6 @@ function Toggle({ checked, onChange, label }) {
 }
 
 function SystemSettings() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : 'AD';
-
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -127,6 +123,12 @@ function SystemSettings() {
   const [sessionSaving, setSessionSaving] = useState(false);
   const [sessionSuccess, setSessionSuccess] = useState('');
   const [sessionError, setSessionError] = useState('');
+  const [settingsSearch, setSettingsSearch] = useState('');
+
+  const matchesSettingsSearch = (text) => {
+    const query = settingsSearch.trim().toLowerCase();
+    return !query || text.toLowerCase().includes(query);
+  };
 
   const updateField = (field, value) => {
     setSettings(prev => ({ ...prev, [field]: value }));
@@ -245,25 +247,14 @@ function SystemSettings() {
               <span className="material-symbols-outlined text-outline mr-2">search</span>
               <input
                 className="bg-transparent border-none focus:ring-0 text-[15px] text-on-surface w-full placeholder:text-outline p-0 focus:outline-none"
-                placeholder="Search patients, dentists, or records..."
+                placeholder="Search settings..."
                 type="text"
+                value={settingsSearch}
+                onChange={(event) => setSettingsSearch(event.target.value)}
               />
             </div>
           </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors">
-              <span className="material-symbols-outlined">settings</span>
-            </button>
-            <button className="text-on-surface-variant hover:text-primary p-2 rounded-full hover:bg-surface-container-highest transition-colors relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
-            </button>
-            <button className="p-1 rounded-full hover:bg-surface-container-highest transition-colors">
-              <div className="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[14px] font-semibold">
-                {initials}
-              </div>
-            </button>
-          </div>
+          <HeaderActions />
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 mt-16 pb-24 md:pb-6 bg-background">
@@ -293,6 +284,7 @@ function SystemSettings() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {matchesSettingsSearch('clinic information address phone email profile') && (
                 <SettingsCard
                   title="Clinic Information"
                   subtitle="Public clinic details used across patient-facing communications."
@@ -326,7 +318,9 @@ function SystemSettings() {
                     </div>
                   </div>
                 </SettingsCard>
+                )}
 
+                {matchesSettingsSearch('notification settings reminders email sms lead time') && (
                 <SettingsCard
                   title="Notification Settings"
                   subtitle="Control automated reminder channels and reminder timing."
@@ -355,7 +349,9 @@ function SystemSettings() {
                     </div>
                   </div>
                 </SettingsCard>
+                )}
 
+                {matchesSettingsSearch('appointment settings duration working hours working days schedule') && (
                 <SettingsCard
                   title="Appointment Settings"
                   subtitle="Set appointment length, operating hours, and working days."
@@ -401,6 +397,7 @@ function SystemSettings() {
                     </div>
                   </div>
                 </SettingsCard>
+                )}
 
                 <section className={sectionCardClass}>
                   <div className="p-6 border-b border-outline-variant/20 bg-surface">
