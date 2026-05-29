@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyInvoiceForm = {
   patient_id: '',
@@ -15,10 +16,7 @@ const emptyPaymentForm = {
   payment_method: 'Cash',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+
 
 const fullName = (item) =>
   [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
@@ -67,10 +65,10 @@ function BillingInvoices() {
 
     try {
       const [invoicesRes, patientsRes, appointmentsRes, paymentsRes] = await Promise.all([
-        fetch('/api/invoices?limit=100', { headers: authHeaders() }),
-        fetch('/api/patients', { headers: authHeaders() }),
-        fetch('/api/appointments', { headers: authHeaders() }),
-        fetch('/api/payments?limit=100', { headers: authHeaders() }),
+        authFetch('/api/invoices?limit=100',),
+        authFetch('/api/patients'),
+        authFetch('/api/appointments'),
+        authFetch('/api/payments?limit=100'),
       ]);
 
       const [invoicesJson, patientsJson, appointmentsJson, paymentsJson] = await Promise.all([
@@ -176,9 +174,8 @@ function BillingInvoices() {
     setError('');
 
     try {
-      const response = await fetch('/api/invoices', {
+      const response = await authFetch('/api/invoices', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(invoiceForm),
       });
       const json = await response.json();
@@ -213,9 +210,8 @@ function BillingInvoices() {
     setError('');
 
     try {
-      const response = await fetch('/api/payments', {
+      const response = await authFetch('/api/payments', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           ...paymentForm,
           amount: Number(paymentForm.amount),
@@ -240,9 +236,8 @@ function BillingInvoices() {
     if (!window.confirm('Cancel this invoice?')) return;
 
     try {
-      const response = await fetch(`/api/invoices/${invoiceId}`, {
+      const response = await authFetch(`/api/invoices/${invoiceId}`, {
         method: 'PUT',
-        headers: authHeaders(),
         body: JSON.stringify({ status: 'Cancelled' }),
       });
       const json = await response.json();

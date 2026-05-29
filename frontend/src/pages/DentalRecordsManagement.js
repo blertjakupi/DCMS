@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   patient_id: '',
@@ -14,10 +15,7 @@ const emptyForm = {
   notes: '',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+
 
 const fullName = (item) => [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
 
@@ -62,10 +60,10 @@ function DentalRecordsManagement() {
 
     try {
       const [recordsRes, patientsRes, dentistsRes, appointmentsRes] = await Promise.all([
-        fetch('/api/dental-records', { headers: authHeaders() }),
-        fetch('/api/patients', { headers: authHeaders() }),
-        fetch('/api/dentists', { headers: authHeaders() }),
-        fetch('/api/appointments', { headers: authHeaders() }),
+        authFetch('/api/dental-records'),
+        authFetch('/api/patients'),
+        authFetch('/api/dentists'),
+        authFetch('/api/appointments'),
       ]);
 
       const [recordsJson, patientsJson, dentistsJson, appointmentsJson] = await Promise.all([
@@ -172,9 +170,8 @@ function DentalRecordsManagement() {
     setError('');
 
     try {
-      const response = await fetch(editingId ? `/api/dental-records/${editingId}` : '/api/dental-records', {
+      const response = await authFetch(editingId ? `/api/dental-records/${editingId}` : '/api/dental-records', {
         method: editingId ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ ...form, appointment_id: form.appointment_id || null }),
       });
       const json = await response.json();
@@ -196,9 +193,8 @@ function DentalRecordsManagement() {
     if (!window.confirm('Delete this dental record?')) return;
 
     try {
-      const response = await fetch(`/api/dental-records/${recordId}`, {
+      const response = await authFetch(`/api/dental-records/${recordId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       const json = await response.json();
 

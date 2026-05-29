@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   first_name: '',
@@ -12,10 +13,6 @@ const emptyForm = {
   specialization: '',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const fullName = (dentist) =>
   [dentist?.first_name, dentist?.last_name].filter(Boolean).join(' ') || 'Unknown';
@@ -65,9 +62,9 @@ function DentistsManagement() {
 
     try {
       const [dentistsRes, appointmentsRes, schedulesRes] = await Promise.all([
-        fetch('/api/dentists', { headers: authHeaders() }),
-        fetch('/api/appointments', { headers: authHeaders() }),
-        fetch('/api/work-schedules', { headers: authHeaders() }),
+        authFetch('/api/dentists'),
+        authFetch('/api/appointments'),
+        authFetch('/api/work-schedules'),
       ]);
 
       const [dentistsJson, appointmentsJson, schedulesJson] = await Promise.all([
@@ -203,9 +200,8 @@ function DentistsManagement() {
     setError('');
 
     try {
-      const response = await fetch(editingId ? `/api/dentists/${editingId}` : '/api/dentists', {
+      const response = await authFetch(editingId ? `/api/dentists/${editingId}` : '/api/dentists', {
         method: editingId ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           ...form,
           phone: form.phone_number,
@@ -232,9 +228,8 @@ function DentistsManagement() {
     if (!window.confirm('Deactivate this dentist?')) return;
 
     try {
-      const response = await fetch(`/api/dentists/${dentistId}`, {
+      const response = await authFetch(`/api/dentists/${dentistId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       const json = await response.json();
 

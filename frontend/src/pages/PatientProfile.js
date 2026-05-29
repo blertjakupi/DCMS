@@ -1,11 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PatientNavbar from '../components/PatientNavbar';
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+import { authFetch } from '../utils/authFetch';
 
 const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A';
@@ -59,12 +55,12 @@ function PatientProfile() {
       setLoading(true);
       setError('');
       try {
-        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        const patRes = await authFetch('/api/patients/me');
         if (!patRes.ok) throw new Error('Failed to load patient profile');
         const patData = await patRes.json();
         setPatient(patData);
 
-        const appRes = await fetch(`/api/appointments/patient/${patData.patient_id}`, { headers: authHeaders() });
+        const appRes = await authFetch(`/api/appointments/patient/${patData.patient_id}`);
         if (appRes.ok) {
           const appData = await appRes.json();
           setAppointments(appData.data || []);
@@ -150,9 +146,8 @@ function PatientProfile() {
         throw new Error('New password and confirmation do not match.');
       }
 
-      const res = await fetch('/api/auth/change-password', {
+      const res = await authFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           current_password: passwordForm.currentPassword,
           new_password: passwordForm.newPassword,

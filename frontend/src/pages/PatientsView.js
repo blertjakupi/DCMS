@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   patient_id: '',
@@ -12,10 +13,6 @@ const emptyForm = {
   notes: '',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const fullName = (patient) =>
   [patient?.first_name, patient?.last_name].filter(Boolean).join(' ') || 'Unknown';
@@ -58,14 +55,14 @@ function PatientsView() {
 
   
   useEffect(() => {
-    fetch('/api/dentists/me', { headers: authHeaders() })
+    authFetch('/api/dentists/me')
       .then(res => res.json())
       .then(data => {
         setDentistId(data.dentist_id);
         setForm(prev => ({ ...prev, dentist_id: data.dentist_id }));
       })
       .catch(err => console.error(err));
-    fetch('/api/dentists', { headers: authHeaders() })
+    authFetch('/api/dentists',)
       .then(res => res.json())
       .then(data => setDentists(data.data || []))
       .catch(err => console.error(err));
@@ -79,13 +76,13 @@ function PatientsView() {
       setError('');
       try {
         
-        const patientsRes = await fetch(`/api/dentists/${dentistId}/patients`, { headers: authHeaders() });
+        const patientsRes = await authFetch(`/api/dentists/${dentistId}/patients`);
         if (!patientsRes.ok) throw new Error('Could not load patients');
         const patientsJson = await patientsRes.json();
         setPatients(patientsJson.data || []);
 
         
-        const appointmentsRes = await fetch(`/api/appointments/dentist/${dentistId}`, { headers: authHeaders() });
+        const appointmentsRes = await authFetch(`/api/appointments/dentist/${dentistId}`);
         if (!appointmentsRes.ok) throw new Error('Could not load appointments');
         const appointmentsJson = await appointmentsRes.json();
         setAppointments(appointmentsJson.data || []);
@@ -104,7 +101,7 @@ function PatientsView() {
       setPatientAppointments([]);
       return;
     }
-    fetch(`/api/appointments/patient/${form.patient_id}`, { headers: authHeaders() })
+    authFetch(`/api/appointments/patient/${form.patient_id}`,)
       .then(res => res.json())
       .then(data => setPatientAppointments(data.data || []))
       .catch(err => console.error(err));
@@ -171,9 +168,8 @@ function PatientsView() {
       const payload = { ...form, appointment_id: form.appointment_id || null };
       const url = editingId ? `/api/dental-records/${editingId}` : '/api/dental-records';
       const method = editingId ? 'PUT' : 'POST';
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method,
-        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
       const json = await response.json();

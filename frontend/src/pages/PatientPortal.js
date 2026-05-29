@@ -1,11 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PatientNavbar from '../components/PatientNavbar';
+import { authFetch } from '../utils/authFetch';
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
@@ -51,7 +48,7 @@ function PatientPortal() {
       setError('');
       try {
         // 1. Fetch patient profile
-        const patientRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        const patientRes = await authFetch('/api/patients/me',);
         if (!patientRes.ok) throw new Error('Failed to fetch patient profile');
         const patientData = await patientRes.json();
         setPatient(patientData);
@@ -60,9 +57,9 @@ function PatientPortal() {
 
         // 2. Fetch appointments, invoices and dental records in parallel
         const [appRes, invRes, recRes] = await Promise.all([
-          fetch(`/api/appointments/patient/${patientId}`, { headers: authHeaders() }),
-          fetch(`/api/invoices`, { headers: authHeaders() }),
-          fetch(`/api/dental-records/patient/${patientId}`, { headers: authHeaders() })
+          authFetch(`/api/appointments/patient/${patientId}`),
+          authFetch(`/api/invoices`),
+          authFetch(`/api/dental-records/patient/${patientId}`)
         ]);
 
         if (appRes.ok) {

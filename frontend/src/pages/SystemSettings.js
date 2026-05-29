@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const defaultSettings = {
   clinic_name: 'DentaCare Pro',
@@ -39,10 +40,7 @@ const workingDayOptions = [
 const inputClass = 'w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg px-3 py-2 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-[15px]';
 const sectionCardClass = 'bg-surface-container-lowest rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-outline-variant/20 overflow-hidden';
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+
 
 function normalizeSettings(payload) {
   const source = payload?.data || payload || {};
@@ -148,8 +146,7 @@ function SystemSettings() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/settings', {
-        headers: authHeaders(),
+      const res = await authFetch('/api/settings', {
       });
 
       if (res.status === 404) {
@@ -181,9 +178,8 @@ function SystemSettings() {
     setSavedMessages(prev => ({ ...prev, [section]: '' }));
 
     try {
-      const res = await fetch('/api/settings', {
+      const res = await authFetch('/api/settings', {
         method: 'PUT',
-        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -218,9 +214,8 @@ function SystemSettings() {
     setSessionError('');
 
     try {
-      const res = await fetch('/api/auth/sessions', {
+      const res = await authFetch('/api/auth/sessions', {
         method: 'DELETE',
-        headers: authHeaders(),
       });
 
       if (!res.ok) {

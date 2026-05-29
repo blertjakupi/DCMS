@@ -2,11 +2,7 @@ import AdminSidebar from '../components/AdminSidebar';
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HeaderActions from '../components/HeaderActions';
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+import { authFetch } from '../utils/authFetch';
 
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -66,11 +62,9 @@ const getTrend = (current, previous, label = 'vs last month') => {
   if (percent > 0) {
     return { text: formatted, icon: 'trending_up', color: 'text-primary' };
   }
-
   if (percent < 0) {
     return { text: formatted, icon: 'trending_down', color: 'text-error' };
   }
-
   return { text: formatted, icon: 'trending_flat', color: 'text-on-surface-variant' };
 };
 
@@ -113,7 +107,6 @@ const getAppointmentTrend = (appointments) => {
       color: 'text-primary',
     };
   }
-
   if (minutesUntil < 60) {
     return {
       text: `Next in ${minutesUntil} min`,
@@ -121,10 +114,8 @@ const getAppointmentTrend = (appointments) => {
       color: 'text-primary',
     };
   }
-
   const hours = Math.floor(minutesUntil / 60);
   const minutes = minutesUntil % 60;
-
   return {
     text: `Next in ${hours}h${minutes ? ` ${minutes}m` : ''}`,
     icon: 'schedule',
@@ -147,8 +138,6 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-
   const [totalPatients, setTotalPatients] = useState(0);
   const [revenueThisMonth, setRevenueThisMonth] = useState(0);
   const [activeDentists, setActiveDentists] = useState(0);
@@ -156,164 +145,158 @@ function AdminDashboard() {
   const [patientTrend, setPatientTrend] = useState(getTrend(0, 0, 'new vs last month'));
   const [revenueTrend, setRevenueTrend] = useState(getTrend(0, 0));
   const [appointmentTrend, setAppointmentTrend] = useState(getAppointmentTrend([]));
-
-
   const [recentUsers, setRecentUsers] = useState([]);
   const [headerSearch, setHeaderSearch] = useState('');
-
-  
   const [alerts, setAlerts] = useState([]);
 
- const loadDashboardData = useCallback(async () => {
-  setLoading(true);
-  setError('');
+  const loadDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const fetchJson = async (url) => {
+        const res = await authFetch(url);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || `Failed: ${url}`);
+        return json;
+      };
 
-  try {
-    const fetchJson = async (url) => {
-      const res = await fetch(url, { headers: authHeaders() });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || `Failed: ${url}`);
-      return json;
-    };
+      const today = toDateOnly(new Date());
+      const currentMonth = getMonthRange();
+      const previousMonth = getMonthRange(-1);
 
-    const today = toDateOnly(new Date());
-    const currentMonth = getMonthRange();
-    const previousMonth = getMonthRange(-1);
+      const results = await Promise.allSettled([
+        fetchJson('/api/patients/count'),
+        fetchJson('/api/dentists/count'),
+        fetchJson(`/api/appointments/count?date=${today}&status=Scheduled`),
+        fetchJson(`/api/payments/sum?from=${currentMonth.from}&to=${currentMonth.to}`),
+        fetchJson('/api/users?limit=1000&sort=-created_at'),
+        fetchJson('/api/inventory-items?limit=1000'),
+        fetchJson('/api/invoices?limit=1000'),
+        fetchJson('/api/reminders?limit=1000'),
+        fetchJson(`/api/payments/sum?from=${previousMonth.from}&to=${previousMonth.to}`),
+        fetchJson('/api/appointments'),
+      ]);
 
-    const results = await Promise.allSettled([
-      fetchJson('/api/patients/count'),
-      fetchJson('/api/dentists/count'),
-      fetchJson(`/api/appointments/count?date=${today}&status=Scheduled`),
-      fetchJson(`/api/payments/sum?from=${currentMonth.from}&to=${currentMonth.to}`),
-      fetchJson('/api/users?limit=1000&sort=-created_at'),
-      fetchJson('/api/inventory-items?limit=1000'),
-      fetchJson('/api/invoices?limit=1000'),
-      fetchJson('/api/reminders?limit=1000'),
-      fetchJson(`/api/payments/sum?from=${previousMonth.from}&to=${previousMonth.to}`),
-      fetchJson('/api/appointments'),
-    ]);
+      const getValue = (result, defaultValue) => (result.status === 'fulfilled' ? result.value : defaultValue);
 
-    const getValue = (result, defaultValue) => result.status === 'fulfilled' ? result.value : defaultValue;
+      const patientCount = getValue(results[0], { count: 0 });
+      const dentistCount = getValue(results[1], { count: 0 });
+      const appointmentCount = getValue(results[2], { count: 0 });
+      const revenueSum = getValue(results[3], { total: 0 });
+      const usersData = getValue(results[4], { data: [] });
+      const inventoryData = getValue(results[5], { data: [] });
+      const invoicesData = getValue(results[6], { data: [] });
+      const remindersData = getValue(results[7], { data: [] });
+      const previousRevenueSum = getValue(results[8], { total: 0 });
+      const appointmentsData = getValue(results[9], { data: [] });
 
-    const patientCount = getValue(results[0], { count: 0 });
-    const dentistCount = getValue(results[1], { count: 0 });
-    const appointmentCount = getValue(results[2], { count: 0 });
-    const revenueSum = getValue(results[3], { total: 0 });
-    const usersData = getValue(results[4], { data: [] });
-    const inventoryData = getValue(results[5], { data: [] });
-    const invoicesData = getValue(results[6], { data: [] });
-    const remindersData = getValue(results[7], { data: [] });
-    const previousRevenueSum = getValue(results[8], { total: 0 });
-    const appointmentsData = getValue(results[9], { data: [] });
+      setTotalPatients(patientCount.count);
+      setActiveDentists(dentistCount.count);
+      setAppointmentsToday(appointmentCount.count);
+      setRevenueThisMonth(revenueSum.total);
 
-    setTotalPatients(patientCount.count);
-    setActiveDentists(dentistCount.count);
-    setAppointmentsToday(appointmentCount.count);
-    setRevenueThisMonth(revenueSum.total);
+      const users = usersData.data || [];
+      const patientUsers = users.filter((user) =>
+        (user.Role?.normalized_name || user.Role?.role_name || '').toUpperCase() === 'PATIENT'
+      );
+      const currentPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, currentMonth)).length;
+      const previousPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, previousMonth)).length;
 
-    const users = usersData.data || [];
-    const patientUsers = users.filter((user) =>
-      (user.Role?.normalized_name || user.Role?.role_name || '').toUpperCase() === 'PATIENT'
-    );
-    const currentPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, currentMonth)).length;
-    const previousPatientRegistrations = patientUsers.filter((user) => isDateWithinRange(user.created_at, previousMonth)).length;
-    const todayAppointments = (appointmentsData.data || [])
-      .filter((appointment) =>
-        appointment.appointment_date === today &&
-        appointment.status === 'Scheduled'
-      )
-      .sort((a, b) => {
-        const first = getAppointmentDateTime(a);
-        const second = getAppointmentDateTime(b);
-        return (first?.getTime() || 0) - (second?.getTime() || 0);
-      });
+      const todayAppointments = (appointmentsData.data || [])
+        .filter((appointment) => appointment.appointment_date === today && appointment.status === 'Scheduled')
+        .sort((a, b) => {
+          const first = getAppointmentDateTime(a);
+          const second = getAppointmentDateTime(b);
+          return (first?.getTime() || 0) - (second?.getTime() || 0);
+        });
 
-    setPatientTrend(getTrend(currentPatientRegistrations, previousPatientRegistrations, 'new vs last month'));
-    setRevenueTrend(getTrend(revenueSum.total, previousRevenueSum.total));
-    setAppointmentTrend(getAppointmentTrend(todayAppointments));
+      setPatientTrend(getTrend(currentPatientRegistrations, previousPatientRegistrations, 'new vs last month'));
+      setRevenueTrend(getTrend(revenueSum.total, previousRevenueSum.total));
+      setAppointmentTrend(getAppointmentTrend(todayAppointments));
 
-    const registrations = [...users].slice(0, 5).map(user => ({
-      user_id: user.user_id,
-      initials: initialsFromName(`${user.first_name} ${user.last_name}`),
-      name: `${user.first_name} ${user.last_name}`,
-      role: user.Role?.role_name || (user.roles && user.roles[0]) || 'User',
-      email: user.email,
-      date: formatDate(user.created_at),
-      active: user.status === 'Active' && !user.is_deleted,
-      avatarBg: user.status === 'Active'
-        ? 'bg-primary-container text-on-primary-container'
-        : 'bg-surface-container-high text-on-surface-variant',
-    }));
-    setRecentUsers(registrations);
+      const registrations = [...users].slice(0, 5).map((user) => ({
+        user_id: user.user_id,
+        initials: initialsFromName(`${user.first_name} ${user.last_name}`),
+        name: `${user.first_name} ${user.last_name}`,
+        role: user.Role?.role_name || (user.roles && user.roles[0]) || 'User',
+        email: user.email,
+        date: formatDate(user.created_at),
+        active: user.status === 'Active' && !user.is_deleted,
+        avatarBg: user.status === 'Active'
+          ? 'bg-primary-container text-on-primary-container'
+          : 'bg-surface-container-high text-on-surface-variant',
+      }));
+      setRecentUsers(registrations);
 
-    const alertsArray = [];
-    const inventory = inventoryData.data || [];
-    const lowStockItems = inventory.filter(item => (item.quantity || 0) < 10);
-    if (lowStockItems.length > 0) {
-      alertsArray.push({
-        icon: 'inventory_2',
-        title: 'Low Inventory Warning',
-        desc: `${lowStockItems.length} item(s) low on stock. Reorder recommended.`,
-        action: 'Order Now',
-        path: '/admin/inventory',
-        actionColor: 'text-primary',
-        bg: 'bg-surface-container-low border-surface-variant',
-        iconBg: 'bg-secondary-container text-on-secondary-container',
-      });
+      const alertsArray = [];
+      const inventory = inventoryData.data || [];
+      const lowStockItems = inventory.filter((item) => (item.quantity || 0) < 10);
+      if (lowStockItems.length > 0) {
+        alertsArray.push({
+          icon: 'inventory_2',
+          title: 'Low Inventory Warning',
+          desc: `${lowStockItems.length} item(s) low on stock. Reorder recommended.`,
+          action: 'Order Now',
+          path: '/admin/inventory',
+          actionColor: 'text-primary',
+          bg: 'bg-surface-container-low border-surface-variant',
+          iconBg: 'bg-secondary-container text-on-secondary-container',
+        });
+      }
+
+      const invoices = invoicesData.data || [];
+      const overdue = invoices.filter((inv) => inv.status === 'Unpaid' && inv.invoice_date < today);
+      if (overdue.length > 0) {
+        alertsArray.push({
+          icon: 'receipt_long',
+          title: 'Overdue Invoice',
+          desc: `${overdue.length} invoice(s) past due. Total: ${formatCurrency(overdue.reduce((s, i) => s + Number(i.total_amount), 0))}`,
+          action: 'View Details',
+          path: '/admin/billing',
+          actionColor: 'text-error',
+          bg: 'bg-error-container/30 border-error-container',
+          iconBg: 'bg-error-container text-error',
+        });
+      }
+
+      const reminders = remindersData.data || [];
+      const failedReminders = reminders.filter((r) => r.status === 'Failed');
+      if (failedReminders.length > 0) {
+        alertsArray.push({
+          icon: 'sms_failed',
+          title: 'Failed Reminder Delivery',
+          desc: `${failedReminders.length} reminder(s) failed to send. Check contact details.`,
+          action: 'Update Contact',
+          path: '/admin/reminders',
+          actionColor: 'text-primary',
+          bg: 'bg-surface-container-low border-surface-variant',
+          iconBg: 'bg-surface-container-highest text-on-surface-variant',
+        });
+      }
+
+      setAlerts(alertsArray);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    const invoices = invoicesData.data || [];
-    const overdue = invoices.filter(inv => inv.status === 'Unpaid' && inv.invoice_date < today);
-    if (overdue.length > 0) {
-      alertsArray.push({
-        icon: 'receipt_long',
-        title: 'Overdue Invoice',
-        desc: `${overdue.length} invoice(s) past due. Total: ${formatCurrency(overdue.reduce((s, i) => s + Number(i.total_amount), 0))}`,
-        action: 'View Details',
-        path: '/admin/billing',
-        actionColor: 'text-error',
-        bg: 'bg-error-container/30 border-error-container',
-        iconBg: 'bg-error-container text-error',
-      });
-    }
-
-    const reminders = remindersData.data || [];
-    const failedReminders = reminders.filter(r => r.status === 'Failed');
-    if (failedReminders.length > 0) {
-      alertsArray.push({
-        icon: 'sms_failed',
-        title: 'Failed Reminder Delivery',
-        desc: `${failedReminders.length} reminder(s) failed to send. Check contact details.`,
-        action: 'Update Contact',
-        path: '/admin/reminders',
-        actionColor: 'text-primary',
-        bg: 'bg-surface-container-low border-surface-variant',
-        iconBg: 'bg-surface-container-highest text-on-surface-variant',
-      });
-    }
-
-    setAlerts(alertsArray);
-  } catch (err) {
-    console.error(err);
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-}, []); 
-
-useEffect(() => {
-  loadDashboardData();
-}, [loadDashboardData]); 
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const filteredRecentUsers = recentUsers.filter((item) => {
     const query = headerSearch.trim().toLowerCase();
-    return !query ||
+    return (
+      !query ||
       item.name.toLowerCase().includes(query) ||
       item.email.toLowerCase().includes(query) ||
-      item.role.toLowerCase().includes(query);
+      item.role.toLowerCase().includes(query)
+    );
   });
 
- 
   const kpis = [
     {
       label: 'Total Patients',
@@ -364,10 +347,7 @@ useEffect(() => {
   return (
     <div className="font-body-base text-body-base text-on-background h-screen overflow-hidden flex">
       <AdminSidebar />
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col md:ml-64 min-h-screen">
-        {/* Top Bar (unchanged) */}
         <header className="bg-surface fixed top-0 right-0 left-0 md:left-64 h-16 z-10 flex justify-between items-center px-6 shadow-sm border-b border-surface-variant hidden md:flex">
           <div className="flex-1 max-w-md hidden md:block">
             <div className="relative rounded-full bg-surface-container-low flex items-center px-4 py-2 border border-outline-variant focus-within:border-primary focus-within:bg-surface-container-lowest transition-colors clinical-glow">
@@ -384,15 +364,12 @@ useEffect(() => {
           <HeaderActions />
         </header>
 
-        {/* Main Canvas */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 mt-16 pb-24 md:pb-6 bg-background">
-          {/* Page Header (static) */}
           <div className="mb-8">
             <h2 className="text-[32px] font-bold text-on-surface">Admin Overview</h2>
             <p className="text-[16px] text-on-surface-variant mt-1">Clinic-wide management and system health.</p>
           </div>
 
-          {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {kpis.map((kpi) => (
               <div
@@ -417,7 +394,6 @@ useEffect(() => {
             ))}
           </div>
 
-          {/* Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Recent Registrations Table */}
             <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-surface-variant overflow-hidden flex flex-col">
@@ -461,11 +437,13 @@ useEffect(() => {
                           <td className="p-4 text-on-surface-variant hidden sm:table-cell">{user.email}</td>
                           <td className="p-4 text-on-surface-variant hidden md:table-cell">{user.date}</td>
                           <td className="p-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              user.active
-                                ? 'bg-primary-container text-on-primary-container'
-                                : 'bg-surface-container-high text-on-surface-variant'
-                            }`}>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                user.active
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-surface-container-high text-on-surface-variant'
+                              }`}
+                            >
                               {user.active ? 'Active' : 'Inactive'}
                             </span>
                           </td>

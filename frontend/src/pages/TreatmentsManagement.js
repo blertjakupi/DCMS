@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   treatment_name: '',
@@ -11,10 +12,6 @@ const emptyForm = {
   average_duration: '',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const fullName = (item) => [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
 
@@ -66,8 +63,8 @@ function TreatmentsManagement() {
 
     try {
       const [treatmentsRes, patientTreatmentsRes] = await Promise.all([
-        fetch('/api/treatments', { headers: authHeaders() }),
-        fetch('/api/patient-treatments', { headers: authHeaders() }),
+        authFetch('/api/treatments'),
+        authFetch('/api/patient-treatments'),
       ]);
 
       const [treatmentsJson, patientTreatmentsJson] = await Promise.all([
@@ -189,9 +186,8 @@ function TreatmentsManagement() {
     setError('');
 
     try {
-      const response = await fetch(editingId ? `/api/treatments/${editingId}` : '/api/treatments', {
+      const response = await authFetch(editingId ? `/api/treatments/${editingId}` : '/api/treatments', {
         method: editingId ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           treatment_name: form.treatment_name,
           description: form.description,
@@ -218,9 +214,8 @@ function TreatmentsManagement() {
     if (!window.confirm('Deactivate this treatment?')) return;
 
     try {
-      const response = await fetch(`/api/treatments/${treatmentId}`, {
+      const response = await authFetch(`/api/treatments/${treatmentId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       const json = await response.json();
 

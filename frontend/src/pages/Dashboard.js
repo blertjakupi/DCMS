@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const formatTime = (timeStr) => {
   if (!timeStr) return '-';
@@ -51,7 +48,7 @@ function Dashboard() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch('/api/dentists/dashboard', { headers: authHeaders() });
+        const res = await authFetch('/api/dentists/dashboard');
         if (!res.ok) throw new Error('Failed to load dashboard');
         const data = await res.json();
 

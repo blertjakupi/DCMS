@@ -1,10 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+import { authFetch } from '../utils/authFetch';
 
 const recordTypes = ['All', 'Treatments', 'X-Rays', 'Documents'];
 
@@ -31,6 +27,7 @@ const statusStyles = {
 function PatientMyRecords() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [patient, setPatient] = useState(null);
   const [records, setRecords] = useState([]);
   const [activeType, setActiveType] = useState('All');
@@ -68,12 +65,12 @@ function PatientMyRecords() {
       setLoading(true);
       setError('');
       try {
-        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        const patRes = await authFetch('/api/patients/me');
         if (!patRes.ok) throw new Error('Failed to load patient profile');
         const patData = await patRes.json();
         setPatient(patData);
 
-        const recRes = await fetch(`/api/dental-records/patient/${patData.patient_id}`, { headers: authHeaders() });
+        const recRes = await authFetch(`/api/dental-records/patient/${patData.patient_id}`);
         if (!recRes.ok) throw new Error('Failed to load dental records');
         const recData = await recRes.json();
         setRecords(recData.data || []);

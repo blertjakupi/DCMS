@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 
 const emptyForm = {
@@ -21,12 +22,7 @@ const statusStyles = {
   'No-Show': 'bg-orange-100 text-orange-700',
 };
 
-const getToken = () => localStorage.getItem('accessToken');
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${getToken()}`,
-  'Content-Type': 'application/json',
-});
 
 const fullName = (item) => {
   if (!item) return 'Unknown';
@@ -84,10 +80,10 @@ function AppointmentsManagement() {
 
     try {
       const [appointmentsRes, patientsRes, dentistsRes, treatmentsRes] = await Promise.all([
-        fetch('/api/appointments', { headers: authHeaders() }),
-        fetch('/api/patients', { headers: authHeaders() }),
-        fetch('/api/dentists', { headers: authHeaders() }),
-        fetch('/api/treatments', { headers: authHeaders() }),
+        authFetch('/api/appointments'),
+        authFetch('/api/patients'),
+        authFetch('/api/dentists'),
+        authFetch('/api/treatments'),
       ]);
 
       const [appointmentsJson, patientsJson, dentistsJson, treatmentsJson] = await Promise.all([
@@ -191,9 +187,8 @@ function AppointmentsManagement() {
     setError('');
 
     try {
-      const response = await fetch(editingId ? `/api/appointments/${editingId}` : '/api/appointments', {
+      const response = await authFetch(editingId ? `/api/appointments/${editingId}` : '/api/appointments', {
         method: editingId ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({ ...form, status: form.status || 'Scheduled' }),
       });
       const json = await response.json();
@@ -215,9 +210,8 @@ function AppointmentsManagement() {
     if (!window.confirm('Cancel this appointment?')) return;
 
     try {
-      const response = await fetch(`/api/appointments/${appointmentId}`, {
+      const response = await authFetch(`/api/appointments/${appointmentId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       const json = await response.json();
 

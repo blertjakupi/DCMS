@@ -1,10 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+import { authFetch } from '../utils/authFetch';
 
 const filters = ['All', 'Pending', 'Paid', 'Overdue'];
 
@@ -28,6 +24,7 @@ const statusStyles = {
 function PatientBilling() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [patient, setPatient] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [activeFilter, setActiveFilter] = useState('All');
@@ -42,12 +39,12 @@ function PatientBilling() {
       setLoading(true);
       setError('');
       try {
-        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+        const patRes = await authFetch('/api/patients/me');
         if (!patRes.ok) throw new Error('Failed to load patient profile');
         const patData = await patRes.json();
         setPatient(patData);
 
-        const invRes = await fetch('/api/invoices', { headers: authHeaders() });
+        const invRes = await authFetch('/api/invoices');
         if (!invRes.ok) throw new Error('Failed to load invoices');
         const invData = await invRes.json();
         setInvoices(invData.data || []);
@@ -107,9 +104,8 @@ function PatientBilling() {
     setPaymentError('');
 
     try {
-      const response = await fetch('/api/payments', {
+      const response = await authFetch('/api/payments', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           invoice_id: paymentModal.invoice.raw.invoice_id,
           amount: paymentModal.invoice.rawAmount,
@@ -122,7 +118,7 @@ function PatientBilling() {
 
       if (!response.ok) throw new Error(data.message || 'Payment could not be completed.');
 
-      const invRes = await fetch('/api/invoices', { headers: authHeaders() });
+      const invRes = await authFetch('/api/invoices');
       if (!invRes.ok) throw new Error('Failed to refresh invoices');
       const invData = await invRes.json();
       setInvoices(invData.data || []);

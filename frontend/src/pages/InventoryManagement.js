@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   item_name: '',
@@ -27,10 +28,7 @@ const emptyTransactionForm = {
 const categories = ['Consumable', 'Instrument', 'Medication', 'Equipment'];
 const units = ['Box', 'Piece', 'Bottle', 'Pack', 'Tube', 'Vial', 'Syringe'];
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -82,8 +80,8 @@ function InventoryManagement() {
 
     try {
       const [itemsRes, lowStockRes] = await Promise.all([
-        fetch('/api/inventory-items', { headers: authHeaders() }),
-        fetch('/api/inventory-items/low-stock', { headers: authHeaders() }),
+        authFetch('/api/inventory-items'),
+        authFetch('/api/inventory-items/low-stock'),
       ]);
 
       const [itemsJson, lowStockJson] = await Promise.all([
@@ -198,9 +196,8 @@ function InventoryManagement() {
     setError('');
 
     try {
-      const response = await fetch(editingId ? `/api/inventory-items/${editingId}` : '/api/inventory-items', {
+      const response = await authFetch(editingId ? `/api/inventory-items/${editingId}` : '/api/inventory-items', {
         method: editingId ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           ...form,
           minimum_stock: form.minimum_stock === '' ? 0 : Number(form.minimum_stock),
@@ -230,9 +227,8 @@ function InventoryManagement() {
     setError('');
 
     try {
-      const response = await fetch('/api/inventory-transactions', {
+      const response = await authFetch('/api/inventory-transactions', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           ...transactionForm,
           quantity: Number(transactionForm.quantity),
@@ -256,9 +252,8 @@ function InventoryManagement() {
     if (!window.confirm('Deactivate this inventory item?')) return;
 
     try {
-      const response = await fetch(`/api/inventory-items/${itemId}`, {
+      const response = await authFetch(`/api/inventory-items/${itemId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       const json = await response.json();
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const emptyForm = {
   patient_id: '',
@@ -12,10 +13,7 @@ const emptyForm = {
   notes: '',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+
 
 const fullName = (item) => [item?.first_name, item?.last_name].filter(Boolean).join(' ') || 'Unknown';
 const initials = (name) =>
@@ -53,7 +51,7 @@ function DentistDentalRecords() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    fetch('/api/dentists/me', { headers: authHeaders() })
+    authFetch('/api/dentists/me')
       .then(res => res.json())
       .then(data => {
         setDentistId(data.dentist_id);
@@ -69,10 +67,10 @@ function DentistDentalRecords() {
       setError('');
       try {
         const [recordsRes, patientsRes, dentistsRes, appointmentsRes] = await Promise.all([
-          fetch(`/api/dental-records/dentist/${dentistId}`, { headers: authHeaders() }),
-          fetch('/api/patients/my', { headers: authHeaders() }),
-          fetch('/api/dentists', { headers: authHeaders() }),
-          fetch(`/api/appointments/dentist/${dentistId}`, { headers: authHeaders() })
+          authFetch(`/api/dental-records/dentist/${dentistId}`),
+          authFetch('/api/patients/my'),
+          authFetch('/api/dentists'),
+          authFetch(`/api/appointments/dentist/${dentistId}`)
         ]);
         const recordsJson = await recordsRes.json();
         if (!recordsRes.ok) throw new Error(recordsJson.message || 'Could not load dental records');
@@ -181,9 +179,8 @@ function DentistDentalRecords() {
       const payload = { ...form, appointment_id: form.appointment_id || null };
       const url = editingId ? `/api/dental-records/${editingId}` : '/api/dental-records';
       const method = editingId ? 'PUT' : 'POST';
-      const response = await fetch(url, {
+      const response = await authFetch(url, {
         method,
-        headers: authHeaders(),
         body: JSON.stringify(payload),
       });
       const json = await response.json();
@@ -202,9 +199,9 @@ function DentistDentalRecords() {
   const handleDelete = async (recordId) => {
     if (!window.confirm('Delete this dental record?')) return;
     try {
-      const response = await fetch(`/api/dental-records/${recordId}`, {
+      const response = await authFetch(`/api/dental-records/${recordId}`, {
         method: 'DELETE',
-        headers: authHeaders(),
+
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'Could not delete record');

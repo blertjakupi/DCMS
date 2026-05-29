@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const statusStyles = {
   Scheduled: 'bg-blue-100 text-blue-700',
@@ -11,12 +12,6 @@ const statusStyles = {
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
 
-const getToken = () => localStorage.getItem('accessToken');
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${getToken()}`,
-  'Content-Type': 'application/json',
-});
 
 const fullName = (item) => {
   if (!item) return 'Unknown';
@@ -66,7 +61,7 @@ function DentistAppointments() {
   const [detailModal, setDetailModal] = useState({ open: false, appointment: null });
 
   useEffect(() => {
-    fetch('/api/dentists/me', { headers: authHeaders() })
+    authFetch('/api/dentists/me')
       .then(res => res.json())
       .then(data => setDentistId(data.dentist_id))
       .catch(err => console.error(err));
@@ -78,8 +73,7 @@ function DentistAppointments() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`/api/appointments/dentist/${dentistId}`, {
-          headers: authHeaders(),
+        const res = await authFetch(`/api/appointments/dentist/${dentistId}`, {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.message || 'Could not load appointments.');
@@ -142,9 +136,8 @@ function DentistAppointments() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`/api/appointments/${statusModal.appointment.appointment_id}`, {
+      const res = await authFetch(`/api/appointments/${statusModal.appointment.appointment_id}`, {
         method: 'PUT',
-        headers: authHeaders(),
         body: JSON.stringify({ status: newStatus }),
       });
       const json = await res.json();

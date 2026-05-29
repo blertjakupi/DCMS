@@ -2,11 +2,8 @@ import AdminSidebar from '../components/AdminSidebar';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 const formatCurrency = (value) =>
   Number(value || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -42,7 +39,7 @@ function ReceptionistDashboard() {
 
     try {
       const fetchJson = async (url) => {
-        const response = await fetch(url, { headers: authHeaders() });
+        const response = await authFetch(url);
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || `Failed: ${url}`);
         return data;

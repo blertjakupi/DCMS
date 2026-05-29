@@ -1,10 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import PatientNavbar from '../components/PatientNavbar';
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
+import { authFetch } from '../utils/authFetch';
 
 const filters = ['All', 'Upcoming', 'Completed', 'Cancelled'];
 
@@ -71,7 +67,7 @@ function PatientAppointments() {
 
   const fetchAppointments = async (patientId) => {
     try {
-      const res = await fetch(`/api/appointments/patient/${patientId}`, { headers: authHeaders() });
+      const res = await authFetch(`/api/appointments/patient/${patientId}`);
       if (!res.ok) throw new Error('Failed to load appointments');
       const data = await res.json();
       setAppointments(data.data || []);
@@ -86,19 +82,19 @@ function PatientAppointments() {
       setLoading(true);
       setError('');
       try {
-        // 1. Get current Patient profile
-        const patRes = await fetch('/api/patients/me', { headers: authHeaders() });
+      
+        const patRes = await authFetch('/api/patients/me');
         if (!patRes.ok) throw new Error('Failed to load patient profile');
         const patData = await patRes.json();
         setPatient(patData);
 
-        // 2. Fetch appointments
+        
         await fetchAppointments(patData.patient_id);
 
-        // 3. Fetch dentists & treatments in parallel for booking dropdowns
+      
         const [dentRes, treatRes] = await Promise.all([
-          fetch('/api/dentists', { headers: authHeaders() }),
-          fetch('/api/treatments', { headers: authHeaders() })
+          authFetch('/api/dentists'),
+          authFetch('/api/treatments')
         ]);
 
         if (dentRes.ok) {
@@ -173,9 +169,8 @@ function PatientAppointments() {
         status: 'Scheduled'
       };
 
-      const res = await fetch('/api/appointments', {
+      const res = await authFetch('/api/appointments', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(payload)
       });
 
@@ -202,9 +197,9 @@ function PatientAppointments() {
     if (!window.confirm('A jeni të sigurt që dëshironi të anuloni këtë takim?')) return;
     
     try {
-      const res = await fetch(`/api/appointments/${apptId}`, {
+      const res = await authFetch(`/api/appointments/${apptId}`, {
         method: 'DELETE',
-        headers: authHeaders()
+
       });
 
       if (!res.ok) {

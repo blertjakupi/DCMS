@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import AdminSidebar from '../components/AdminSidebar';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const statuses = ['Pending', 'Sent', 'Failed'];
 
@@ -12,10 +13,6 @@ const statusBadge = {
   Failed: 'bg-error-container/30 text-error border-error/30',
 };
 
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-  'Content-Type': 'application/json',
-});
 
 function patientName(reminder) {
   const patient = reminder.Patient || reminder.Appointment?.Patient;
@@ -101,9 +98,7 @@ function RemindersPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/reminders', {
-        headers: authHeaders(),
-      });
+      const res = await authFetch('/api/reminders');
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || `Failed to fetch reminders (${res.status})`);
@@ -111,9 +106,7 @@ function RemindersPage() {
       const json = await res.json();
       setReminders(json.data || []);
 
-      const summaryRes = await fetch('/api/reminders/summary', {
-        headers: authHeaders(),
-      });
+      const summaryRes = await authFetch('/api/reminders/summary');
       if (summaryRes.ok) {
         const summaryJson = await summaryRes.json();
         setSummary(summaryJson.data || {
@@ -168,9 +161,8 @@ function RemindersPage() {
       if (!form.scheduledDate) throw new Error('Scheduled date is required.');
 
       const scheduledDate = form.scheduledDate ? new Date(form.scheduledDate).toISOString() : null;
-      const res = await fetch(`/api/reminders/${selectedReminder.reminder_id}`, {
+      const res = await authFetch(`/api/reminders/${selectedReminder.reminder_id}`, {
         method: 'PUT',
-        headers: authHeaders(),
         body: JSON.stringify({
           type: form.type,
           reminder_type: form.type,
@@ -197,9 +189,8 @@ function RemindersPage() {
     setDeleting(reminder.reminder_id);
     setError('');
     try {
-      const res = await fetch(`/api/reminders/${reminder.reminder_id}`, {
+      const res = await authFetch(`/api/reminders/${reminder.reminder_id}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -225,9 +216,8 @@ function RemindersPage() {
         throw new Error('New password and confirmation do not match.');
       }
 
-      const res = await fetch('/api/auth/change-password', {
+      const res = await authFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: authHeaders(),
         body: JSON.stringify({
           current_password: passwordForm.currentPassword,
           new_password: passwordForm.newPassword,

@@ -503,18 +503,14 @@ const authController = {
       const { token } = req.body;
 
       if (!token) {
-        return res.status(401).json({
-          message: 'Refresh token është i detyrueshëm.'
-        });
+        return res.status(401).json({ message: 'Refresh token është i detyrueshëm.' });
       }
 
       let decoded;
       try {
         decoded = jwt.verify(token, REFRESH_TOKEN_SECRET);
       } catch (error) {
-        return res.status(403).json({
-          message: 'Refresh token i pavlefshëm.'
-        });
+        return res.status(403).json({ message: 'Refresh token i pavlefshëm.' });
       }
 
       const hashed = hashToken(token);
@@ -524,16 +520,12 @@ const authController = {
           token: hashed,
           user_id: decoded.user_id,
           revoked_at: null,
-          expires_at: {
-            [Op.gt]: new Date()
-          }
+          expires_at: { [Op.gt]: new Date() }
         }
       });
 
       if (!storedToken) {
-        return res.status(403).json({
-          message: 'Refresh token i pavlefshëm ose i skaduar.'
-        });
+        return res.status(403).json({ message: 'Refresh token i pavlefshëm ose i skaduar.' });
       }
 
       const user = await User.findOne({
@@ -546,31 +538,47 @@ const authController = {
       });
 
       if (!user) {
-        return res.status(403).json({
-          message: 'Llogaria e përdoruesit nuk është valide.'
-        });
+        return res.status(403).json({ message: 'Llogaria e përdoruesit nuk është valide.' });
       }
 
-      
-      storedToken.revoked_at = new Date();
-      await storedToken.save();
+      const transaction = await sequelize.transaction();
+      try {
+        await storedToken.update({ revoked_at: new Date() }, { transaction });
 
-      const newAccessToken = createAccessToken(user);
-      const newRawRefreshToken = createRefreshToken(user);
-      const newHashedRefreshToken = hashToken(newRawRefreshToken);
+        const newAccessToken = createAccessToken(user);
+        const newRawRefreshToken = createRefreshToken(user);
+        const newHashedRefreshToken = hashToken(newRawRefreshToken);
 
-      await RefreshToken.create({
-        user_id: user.user_id,
-        token: newHashedRefreshToken,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        created_at: new Date(),
-        revoked_at: null
-      });
+        const existing = await RefreshToken.findOne({
+          where: { token: newHashedRefreshToken, user_id: user.user_id },
+          transaction
+        });
+        if (existing) {
+          await transaction.commit();
+          return res.status(200).json({
+            accessToken: newAccessToken,
+            refreshToken: newRawRefreshToken
+          });
+        }
 
-      return res.status(200).json({
-        accessToken: newAccessToken,
-        refreshToken: newRawRefreshToken
-      });
+        await RefreshToken.create({
+          user_id: user.user_id,
+          token: newHashedRefreshToken,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          created_at: new Date(),
+          revoked_at: null
+        }, { transaction });
+
+        await transaction.commit();
+
+        return res.status(200).json({
+          accessToken: newAccessToken,
+          refreshToken: newRawRefreshToken
+        });
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
     } catch (error) {
       console.error('REFRESH TOKEN ERROR:', error);
       return res.status(500).json({

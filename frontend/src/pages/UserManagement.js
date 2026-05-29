@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminSidebar from '../components/AdminSidebar';
 import HeaderActions from '../components/HeaderActions';
+import { authFetch } from '../utils/authFetch';
 
 const roleBadge = {
   Admin: 'bg-primary-container/20 text-on-primary-container border-primary-container/30',
@@ -62,36 +63,31 @@ function UserManagement() {
   const [roles, setRoles] = useState([]);
 
 // add this inside fetchUsers or as a separate useEffect
-useEffect(() => {
-  const token = localStorage.getItem('accessToken');
-  fetch('/api/roles', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-    .then(res => res.json())
-    .then(data => setRoles(data.data || []));
-}, []);
+  useEffect(() => {
+    authFetch('/api/roles')
+      .then(res => res.json())
+      .then(data => setRoles(data.data || []))
+      .catch(err => console.error(err));
+    }, []);
 
   const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch('/api/users', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Failed to fetch users (${res.status})`);
-      }
-      const json = await res.json();
-      const mapped = (json.data || []).map(mapApiUser);
-      setUsers(mapped);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  setError('');
+  try {
+    const res = await authFetch('/api/users');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || `Failed to fetch users (${res.status})`);
     }
-  }, []);
+    const json = await res.json();
+    const mapped = (json.data || []).map(mapApiUser);
+    setUsers(mapped);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     fetchUsers();
@@ -115,16 +111,11 @@ const saveRole = async () => {
   if (!selectedUser) return;
   setSaving(true);
   try {
-    const token = localStorage.getItem('accessToken');
     const role = roles.find(r => r.role_name === newRole);
     if (!role) throw new Error('Role not found');
 
-    const res = await fetch(`/api/users/${selectedUser.id}`, {
+    const res = await authFetch(`/api/users/${selectedUser.id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
       body: JSON.stringify({ role_id: role.role_id })
     });
     if (!res.ok) {
@@ -140,31 +131,26 @@ const saveRole = async () => {
   }
 };
 
-  const handleDeactivate = async (u) => {
-    if (u.status === 'Inactive') return;
-    if (!window.confirm(`Deactivate ${u.name}? The account will remain in the list as Inactive.`)) return;
-    setDeleting(u.id);
-    try {
-      const token = localStorage.getItem('accessToken');
-      const res = await fetch(`/api/users/${u.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: 'Inactive' }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to deactivate user');
-      }
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDeleting(null);
+ const handleDeactivate = async (u) => {
+  if (u.status === 'Inactive') return;
+  if (!window.confirm(`Deactivate ${u.name}? The account will remain in the list as Inactive.`)) return;
+  setDeleting(u.id);
+  try {
+    const res = await authFetch(`/api/users/${u.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: 'Inactive' }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'Failed to deactivate user');
     }
-  };
+    await fetchUsers();
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setDeleting(null);
+  }
+};
 
   return (
     <div className="font-body-base text-body-base text-on-background h-screen overflow-hidden flex">
