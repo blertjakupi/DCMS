@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import DentistSidebar from '../components/DentistSidebar';
 import HeaderActions from '../components/HeaderActions';
 import { authFetch } from '../utils/authFetch';
+import { useLocation } from 'react-router-dom';
 
 const statusStyles = {
   Scheduled: 'bg-blue-100 text-blue-700',
@@ -59,6 +60,7 @@ function DentistAppointments() {
   const [saving, setSaving] = useState(false);
 
   const [detailModal, setDetailModal] = useState({ open: false, appointment: null });
+  const location = useLocation();
 
   useEffect(() => {
     authFetch('/api/dentists/me')
@@ -86,6 +88,17 @@ function DentistAppointments() {
     };
     loadData();
   }, [dentistId, refreshTrigger]);
+
+  useEffect(() => {
+  const viewId = location.state?.viewAppointmentId;
+  if (viewId && appointments.length > 0) {
+    const appointment = appointments.find(a => a.appointment_id === viewId);
+    if (appointment) {
+      setDetailModal({ open: true, appointment });
+      window.history.replaceState({}, document.title);
+    }
+  }
+}, [appointments, location.state]);
 
   useEffect(() => {
     const onKeyDown = (e) => {

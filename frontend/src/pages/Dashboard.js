@@ -105,6 +105,14 @@ function Dashboard() {
     loadDashboardData();
   }, [navigate]);
 
+  const handleNextAppointmentClick = () => {
+  if (nextAppointment?.appointment_id) {
+    navigate('/dentist/appointments', { state: { viewAppointmentId: nextAppointment.appointment_id } });
+  } else {
+    navigate('/dentist/appointments');
+  }
+};
+
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const displayName = dentist?.first_name ? `${dentist.first_name} ${dentist.last_name}` : (user.full_name || 'Doctor');
   const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -182,7 +190,7 @@ function Dashboard() {
                 <p className="text-headline-lg font-headline-lg text-on-background">{pendingRecordsCount}</p>
               </div>
             </div>
-            <div className="bg-surface-container-lowest rounded-[24px] p-md shadow-[0_10px_30px_rgba(0,0,0,0.02)] border border-surface-container-highest/50 flex flex-col justify-between relative overflow-hidden hover:ring-2 hover:ring-primary/30 transition-all cursor-pointer">
+            <div className="bg-surface-container-lowest rounded-[24px] p-md shadow-[0_10px_30px_rgba(0,0,0,0.02)] border border-surface-container-highest/50 flex flex-col justify-between relative overflow-hidden hover:ring-2 hover:ring-primary/30 transition-all cursor-pointer" onClick={handleNextAppointmentClick}>
               <div className="absolute inset-0 bg-gradient-to-br from-primary-container/10 to-transparent pointer-events-none"></div>
               <div className="flex justify-between items-start mb-sm relative z-10">
                 <div className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-md">
