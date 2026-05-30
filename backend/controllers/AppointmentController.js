@@ -9,6 +9,9 @@ const appointmentService = require('../services/appointmentService');
 const { syncReminderForAppointment } = require('../services/reminderService');
 
 const allowedStatuses = ['Scheduled', 'Completed', 'Cancelled', 'No-Show'];
+const CLINIC_OPEN_MINUTES = 8 * 60;
+const CLINIC_CLOSE_MINUTES = 20 * 60;
+const SLOT_INTERVAL_MINUTES = 30;
 
 const getAppointmentDateTime = (appointmentDate, appointmentTime = '00:00:00') => {
   return new Date(`${appointmentDate}T${appointmentTime}`);
@@ -21,6 +24,49 @@ const isPastAppointmentDateTime = (appointmentDate, appointmentTime) => {
 const timeToMinutes = (time) => {
   const [hours, minutes] = String(time || '00:00').split(':').map(Number);
   return (hours * 60) + minutes;
+};
+
+const minutesToTime = (minutes) => {
+  const hours = Math.floor(minutes / 60).toString().padStart(2, '0');
+  const mins = (minutes % 60).toString().padStart(2, '0');
+  return `${hours}:${mins}:00`;
+};
+
+const formatTimeLabel = (time) => String(time || '').slice(0, 5);
+
+const getLocalDate = (dateString) => {
+  const [year, month, day] = String(dateString || '').split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const isSunday = (dateString) => {
+  const date = getLocalDate(dateString);
+  return date ? date.getDay() === 0 : false;
+};
+
+const isHalfHourSlot = (time) => {
+  const [, minutes = ''] = String(time || '').split(':');
+  return minutes === '00' || minutes === '30';
+};
+
+const getScheduleValidationMessage = (appointmentDate, appointmentTime, duration) => {
+  if (isSunday(appointmentDate)) {
+    return 'Klinika nuk punon te dielave. Ju lutem zgjidhni nje date tjeter.';
+  }
+
+  if (!isHalfHourSlot(appointmentTime)) {
+    return 'Terminet mund te caktohen vetem ne intervale cdo 30 minuta.';
+  }
+
+  const startMinutes = timeToMinutes(appointmentTime);
+  const endMinutes = startMinutes + Number(duration || 30);
+
+  if (startMinutes < CLINIC_OPEN_MINUTES || endMinutes > CLINIC_CLOSE_MINUTES) {
+    return 'Termini duhet te jete brenda orarit te klinikes 08:00-20:00.';
+  }
+
+  return '';
 };
 
 const appointmentsOverlap = (firstStart, firstDuration, secondStart, secondDuration) => {
@@ -59,6 +105,42 @@ const findDentistTimeConflict = async ({
       appointment.duration
     )
   );
+};
+
+const buildDentistAvailability = async ({ dentistId, appointmentDate, duration, excludeAppointmentId }) => {
+  const where = {
+    dentist_id: dentistId,
+    appointment_date: appointmentDate,
+    status: { [Op.ne]: 'Cancelled' }
+  };
+
+  if (excludeAppointmentId) {
+    where.appointment_id = { [Op.ne]: excludeAppointmentId };
+  }
+
+  const sameDayAppointments = await Appointment.findAll({
+    where,
+    order: [['appointment_time', 'ASC']]
+  });
+
+  const slots = [];
+  for (let minutes = CLINIC_OPEN_MINUTES; minutes < CLINIC_CLOSE_MINUTES; minutes += SLOT_INTERVAL_MINUTES) {
+    const time = minutesToTime(minutes);
+    const scheduleMessage = getScheduleValidationMessage(appointmentDate, time, duration);
+    const conflict = sameDayAppointments.find((appointment) =>
+      appointmentsOverlap(time, duration, appointment.appointment_time, appointment.duration)
+    );
+
+    slots.push({
+      time,
+      available: !scheduleMessage && !conflict,
+      reason: scheduleMessage || (conflict
+        ? `Nuk lejohet sepse mbivendoset me terminin ${formatTimeLabel(conflict.appointment_time)}-${formatTimeLabel(minutesToTime(timeToMinutes(conflict.appointment_time) + Number(conflict.duration || 30)))}.`
+        : '')
+    });
+  }
+
+  return slots;
 };
 
 const appointmentController = {
@@ -108,6 +190,74 @@ const appointmentController = {
       res.json({ count });
     } catch (error) {
       res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  getAvailability: async (req, res) => {
+    try {
+      const dentistId = req.params.dentistId || req.query.dentistId;
+      const { date, treatmentId, excludeAppointmentId } = req.query;
+
+      if (!dentistId || !date) {
+        return res.status(400).json({
+          message: 'dentistId dhe date jane te detyrueshme.'
+        });
+      }
+
+      const dentist = await Dentist.findOne({
+        where: {
+          dentist_id: dentistId,
+          is_deleted: false,
+          status: 'Active'
+        }
+      });
+
+      if (!dentist) {
+        return res.status(404).json({
+          message: 'Dentisti nuk u gjet ose nuk eshte aktiv.'
+        });
+      }
+
+      let duration = 30;
+      if (treatmentId) {
+        const treatment = await Treatment.findOne({
+          where: {
+            treatment_id: treatmentId,
+            status: 'Active',
+            is_deleted: false
+          }
+        });
+
+        if (!treatment) {
+          return res.status(404).json({
+            message: 'Trajtimi nuk u gjet ose nuk eshte aktiv.'
+          });
+        }
+
+        duration = treatment.average_duration || 30;
+      }
+
+      const slots = await buildDentistAvailability({
+        dentistId,
+        appointmentDate: date,
+        duration,
+        excludeAppointmentId
+      });
+
+      return res.status(200).json({
+        message: 'Disponueshmeria u mor me sukses.',
+        data: {
+          dentist_id: parseInt(dentistId, 10),
+          appointment_date: date,
+          duration,
+          slots
+        }
+      });
+    } catch (error) {
+      console.error('GET APPOINTMENT AVAILABILITY ERROR:', error);
+      return res.status(500).json({
+        message: 'Gabim i brendshem gjate marrjes se disponueshmerise.'
+      });
     }
   },
 
@@ -415,6 +565,18 @@ const appointmentController = {
         }
         const duration = treatment.average_duration || 30; 
 
+        const scheduleValidationMessage = getScheduleValidationMessage(
+          appointment_date,
+          appointment_time,
+          duration
+        );
+
+        if (scheduleValidationMessage) {
+          return res.status(400).json({
+            message: scheduleValidationMessage
+          });
+        }
+
         
         const conflictingAppointment = await findDentistTimeConflict({
           dentistId: dentist_id,
@@ -639,6 +801,18 @@ const appointmentController = {
       const effectiveDuration = duration || selectedTreatment?.average_duration || appointment.duration;
 
       if (dentist_id || appointment_date || appointment_time || duration || treatment_id) {
+        const scheduleValidationMessage = getScheduleValidationMessage(
+          effectiveDate,
+          effectiveTime,
+          effectiveDuration
+        );
+
+        if (scheduleValidationMessage) {
+          return res.status(400).json({
+            message: scheduleValidationMessage
+          });
+        }
+
         const conflictingAppointment = await findDentistTimeConflict({
           dentistId: effectiveDentistId,
           appointmentDate: effectiveDate,

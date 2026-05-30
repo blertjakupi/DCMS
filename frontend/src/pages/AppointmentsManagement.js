@@ -15,6 +15,8 @@ const emptyForm = {
   notes: '',
 };
 
+const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 const statusStyles = {
   Scheduled: 'bg-blue-100 text-blue-700',
   Completed: 'bg-green-100 text-green-700',
@@ -56,6 +58,50 @@ const formatTime = (value) => {
   });
 };
 
+const formatDuration = (minutes) => {
+  const numericMinutes = Number(minutes || 30);
+  if (numericMinutes < 60) return `${numericMinutes} min`;
+  const hours = Math.floor(numericMinutes / 60);
+  const remainingMinutes = numericMinutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes} min` : `${hours}h`;
+};
+
+const toDateString = (date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
+
+const getTodayDateString = () => toDateString(new Date());
+
+const getLocalDate = (dateString) => {
+  const [year, month, day] = String(dateString || '').split('-').map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+};
+
+const isSundayDate = (dateString) => getLocalDate(dateString).getDay() === 0;
+
+const buildCalendarDays = (visibleMonth) => {
+  const year = visibleMonth.getFullYear();
+  const month = visibleMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = [];
+
+  for (let i = 0; i < firstWeekday; i += 1) {
+    days.push(null);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push(new Date(year, month, day));
+  }
+
+  return days;
+};
+
+const normalizeTime = (time) => String(time || '').slice(0, 5);
+
 function AppointmentsManagement() {
   const location = useLocation();
   const SidebarComponent = location.pathname.startsWith('/dentist') ? DentistSidebar : AdminSidebar;
@@ -68,11 +114,15 @@ function AppointmentsManagement() {
   const [search, setSearch] = useState('');
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [visibleMonth, setVisibleMonth] = useState(() => getLocalDate(getTodayDateString()));
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewAppointment, setViewAppointment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -160,10 +210,71 @@ function AppointmentsManagement() {
   const selectedTreatment = treatments.find(
     (treatment) => String(treatment.treatment_id) === String(form.treatment_id)
   );
+  const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
+  const visibleMonthLabel = visibleMonth.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!quickAddOpen || !form.dentist_id || !form.appointment_date || !form.treatment_id || isSundayDate(form.appointment_date)) {
+        setAvailableSlots([]);
+        if (isSundayDate(form.appointment_date)) {
+          setForm((prev) => ({ ...prev, appointment_time: '' }));
+        }
+        return;
+      }
+
+      setSlotsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          date: form.appointment_date,
+          treatmentId: form.treatment_id,
+        });
+
+        if (editingId) {
+          params.set('excludeAppointmentId', editingId);
+        }
+
+        const response = await authFetch(`/api/appointments/dentist/${form.dentist_id}/availability?${params.toString()}`);
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.message || 'Could not load available slots.');
+
+        const slots = json.data?.slots || [];
+        setAvailableSlots(slots);
+
+        const currentTime = normalizeTime(form.appointment_time);
+        const matchingSlot = slots.find((slot) => normalizeTime(slot.time) === currentTime && slot.available);
+        if (matchingSlot && form.appointment_time !== matchingSlot.time) {
+          setForm((prev) => ({
+            ...prev,
+            appointment_time: matchingSlot.time,
+          }));
+        } else if (!matchingSlot) {
+          const firstAvailable = slots.find((slot) => slot.available);
+          setForm((prev) => ({
+            ...prev,
+            appointment_time: firstAvailable ? firstAvailable.time : '',
+          }));
+        }
+      } catch (err) {
+        setAvailableSlots([]);
+        setForm((prev) => ({ ...prev, appointment_time: '' }));
+        setError(err.message);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchAvailability();
+  }, [quickAddOpen, form.dentist_id, form.appointment_date, form.treatment_id, form.appointment_time, editingId]);
 
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setAvailableSlots([]);
+    setVisibleMonth(getLocalDate(getTodayDateString()));
     setQuickAddOpen(true);
   };
 
@@ -178,11 +289,23 @@ function AppointmentsManagement() {
       notes: appointment.notes || '',
       status: appointment.status || 'Scheduled',
     });
+    setAvailableSlots([]);
+    setVisibleMonth(getLocalDate(appointment.appointment_date || getTodayDateString()));
     setQuickAddOpen(true);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (isSundayDate(form.appointment_date)) {
+      setError('Clinic is closed on Sundays. Please choose another date.');
+      return;
+    }
+
+    if (!form.appointment_time) {
+      setError('Please choose an available appointment time.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
@@ -198,9 +321,12 @@ function AppointmentsManagement() {
       setForm(emptyForm);
       setEditingId(null);
       setQuickAddOpen(false);
+      setSuccessMessage(editingId ? 'Termini u perditesua me sukses.' : 'Termini u krijua me sukses.');
+      window.setTimeout(() => setSuccessMessage(''), 5000);
       await loadData();
     } catch (err) {
       setError(err.message);
+      setSuccessMessage('');
     } finally {
       setSaving(false);
     }
@@ -314,6 +440,13 @@ function AppointmentsManagement() {
         {error && (
           <div className="mb-md rounded-xl border border-error-container bg-error-container/60 px-4 py-3 text-error text-label-bold">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-md rounded-xl border border-[#ceead6] bg-[#e6f4ea] px-4 py-3 text-[#137333] text-label-bold flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px]">check_circle</span>
+            <span>{successMessage}</span>
           </div>
         )}
 
@@ -463,29 +596,6 @@ function AppointmentsManagement() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-md">
-              <div className="space-y-unit">
-                <label className="font-label-bold text-on-surface-variant text-caption">Date</label>
-                <input
-                  className="w-full px-3 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
-                  type="date"
-                  value={form.appointment_date}
-                  onChange={(event) => setForm((prev) => ({ ...prev, appointment_date: event.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-unit">
-                <label className="font-label-bold text-on-surface-variant text-caption">Time</label>
-                <input
-                  className="w-full px-3 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
-                  type="time"
-                  value={form.appointment_time}
-                  onChange={(event) => setForm((prev) => ({ ...prev, appointment_time: event.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-
             <div className="space-y-unit">
               <label className="font-label-bold text-on-surface-variant text-caption">Select Dentist</label>
               <select
@@ -514,15 +624,111 @@ function AppointmentsManagement() {
                 <option value="">Select treatment</option>
                 {treatments.map((treatment) => (
                   <option key={treatment.treatment_id} value={treatment.treatment_id}>
-                    {treatment.treatment_name}
+                    {treatment.treatment_name} - {formatDuration(treatment.average_duration)}
                   </option>
                 ))}
               </select>
               {selectedTreatment?.average_duration && (
                 <p className="text-caption text-on-surface-variant">
-                  Duration: {selectedTreatment.average_duration} minutes
+                  Duration: {formatDuration(selectedTreatment.average_duration)}
                 </p>
               )}
+            </div>
+
+            <div className="space-y-unit">
+              <div className="flex items-center justify-between gap-3">
+                <label className="font-label-bold text-on-surface-variant text-caption">Date</label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant"
+                    title="Previous month"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                  </button>
+                  <span className="text-caption font-label-bold text-on-surface min-w-28 text-center">
+                    {visibleMonthLabel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                    className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant"
+                    title="Next month"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center text-caption">
+                {weekDays.map((day) => (
+                  <span
+                    key={day}
+                    className={`py-1 font-label-bold ${day === 'Sun' ? 'text-error' : 'text-on-surface-variant'}`}
+                  >
+                    {day}
+                  </span>
+                ))}
+                {calendarDays.map((date, index) => {
+                  if (!date) return <span key={`empty-${index}`} className="h-9" />;
+
+                  const dateString = toDateString(date);
+                  const isSelected = form.appointment_date === dateString;
+                  const isPast = dateString < getTodayDateString();
+                  const isSunday = date.getDay() === 0;
+                  const disabled = isPast || isSunday;
+
+                  return (
+                    <button
+                      key={dateString}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setError('');
+                        setForm((prev) => ({ ...prev, appointment_date: dateString, appointment_time: '' }));
+                      }}
+                      className={`h-9 rounded-lg font-label-bold transition-colors ${
+                        isSelected
+                          ? 'bg-primary text-on-primary'
+                          : isSunday
+                            ? 'bg-error-container/30 text-error'
+                            : 'text-on-surface hover:bg-primary/10'
+                      } ${disabled ? 'opacity-60 cursor-not-allowed hover:bg-error-container/30' : ''}`}
+                      title={isSunday ? 'Clinic is closed on Sundays' : dateString}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-unit">
+              <label className="font-label-bold text-on-surface-variant text-caption">Time</label>
+              <select
+                className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
+                value={form.appointment_time}
+                onChange={(event) => setForm((prev) => ({ ...prev, appointment_time: event.target.value }))}
+                disabled={!form.appointment_date || !form.dentist_id || !form.treatment_id || slotsLoading || availableSlots.length === 0}
+                required
+              >
+                <option value="">
+                  {slotsLoading ? 'Checking available times...' : 'Select time'}
+                </option>
+                {availableSlots.map((slot) => (
+                  <option key={slot.time} value={slot.time} disabled={!slot.available} title={slot.reason || ''}>
+                    {formatTime(slot.time)}{slot.available ? '' : ` - ${slot.reason || 'Unavailable'}`}
+                  </option>
+                ))}
+              </select>
+              {form.appointment_date && !slotsLoading && availableSlots.length > 0 && !availableSlots.some((slot) => slot.available) && (
+                <p className="text-caption text-error">
+                  No available times for this dentist on the selected date.
+                </p>
+              )}
+              <p className="text-caption text-on-surface-variant">
+                Clinic hours: 08:00-20:00, every 30 minutes. Selected treatment duration: {formatDuration(selectedTreatment?.average_duration)}.
+              </p>
             </div>
 
             <div className="space-y-unit">

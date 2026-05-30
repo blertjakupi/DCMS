@@ -31,7 +31,7 @@ const statusStyles = {
   }
 };
 
-const defaultTimeSlots = ['09:00:00', '09:30:00', '10:00:00', '10:30:00', '11:00:00', '11:30:00', '13:00:00', '13:30:00', '14:00:00', '14:30:00', '15:00:00', '15:30:00'];
+const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const formatTimeLabel = (timeStr) => {
   if (!timeStr) return '';
@@ -41,10 +41,50 @@ const formatTimeLabel = (timeStr) => {
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 };
 
+const formatDuration = (minutes) => {
+  const numericMinutes = Number(minutes || 30);
+  if (numericMinutes < 60) return `${numericMinutes} min`;
+  const hours = Math.floor(numericMinutes / 60);
+  const remainingMinutes = numericMinutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes} min` : `${hours}h`;
+};
+
 const getTodayDateString = () => {
   const now = new Date();
   const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
   return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+};
+
+const toDateString = (date) => {
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+};
+
+const getLocalDate = (dateString) => {
+  const [year, month, day] = String(dateString || '').split('-').map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+};
+
+const isSundayDate = (dateString) => getLocalDate(dateString).getDay() === 0;
+
+const buildCalendarDays = (visibleMonth) => {
+  const year = visibleMonth.getFullYear();
+  const month = visibleMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = [];
+
+  for (let i = 0; i < firstWeekday; i += 1) {
+    days.push(null);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push(new Date(year, month, day));
+  }
+
+  return days;
 };
 
 const getAppointmentDateTime = (appointment) => {
@@ -66,9 +106,13 @@ function PatientAppointments() {
   const [selectedDentist, setSelectedDentist] = useState('');
   const [selectedTreatment, setSelectedTreatment] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('10:00:00');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [visibleMonth, setVisibleMonth] = useState(() => getLocalDate(getTodayDateString()));
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [bookingNotes, setBookingNotes] = useState('');
   const [bookingError, setBookingError] = useState('');
+  const [bookingSuccess, setBookingSuccess] = useState('');
   const [bookingLoading, setBookingLoading] = useState(false);
 
   // Search/Filters
@@ -135,6 +179,44 @@ function PatientAppointments() {
     initPage();
   }, []);
 
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!selectedDentist || !selectedDate || !selectedTreatment || isSundayDate(selectedDate)) {
+        setAvailableSlots([]);
+        setSelectedTime('');
+        return;
+      }
+
+      setSlotsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          date: selectedDate,
+          treatmentId: selectedTreatment
+        });
+        const res = await authFetch(`/api/appointments/dentist/${selectedDentist}/availability?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Nuk u moren oraret e lira.');
+
+        const slots = data.data?.slots || [];
+        setAvailableSlots(slots);
+
+        const stillAvailable = slots.some((slot) => slot.time === selectedTime && slot.available);
+        if (!stillAvailable) {
+          setSelectedTime(slots.find((slot) => slot.available)?.time || '');
+        }
+      } catch (err) {
+        console.error(err);
+        setAvailableSlots([]);
+        setSelectedTime('');
+        setBookingError(err.message);
+      } finally {
+        setSlotsLoading(false);
+      }
+    };
+
+    fetchAvailability();
+  }, [selectedDentist, selectedDate, selectedTreatment, selectedTime]);
+
   const visibleAppointments = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const now = new Date();
@@ -160,6 +242,16 @@ function PatientAppointments() {
     });
   }, [activeFilter, search, appointments]);
 
+  const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
+  const visibleMonthLabel = visibleMonth.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  });
+  const selectedTreatmentDetails = useMemo(
+    () => treatments.find((treatment) => treatment.treatment_id.toString() === selectedTreatment),
+    [selectedTreatment, treatments]
+  );
+
   const handleBookAppointment = async (e) => {
     e.preventDefault();
     if (!selectedDentist || !selectedTreatment || !selectedDate || !selectedTime) {
@@ -168,6 +260,11 @@ function PatientAppointments() {
     }
 
     const selectedDateTime = new Date(`${selectedDate}T${selectedTime}`);
+    if (isSundayDate(selectedDate)) {
+      setBookingError('Klinika nuk punon te dielave. Ju lutem zgjidhni nje date tjeter.');
+      return;
+    }
+
     if (selectedDate < todayDate || selectedDateTime < new Date()) {
       setBookingError('Nuk mund të rezervoni takim në datë ose orë të kaluar.');
       return;
@@ -175,6 +272,7 @@ function PatientAppointments() {
 
     setBookingLoading(true);
     setBookingError('');
+    setBookingSuccess('');
     try {
       const payload = {
         patient_id: patient.patient_id,
@@ -202,6 +300,9 @@ function PatientAppointments() {
       setBookingNotes('');
       // Reset date/time
       setSelectedDate('');
+      setSelectedTime('');
+      setBookingSuccess('Termini u rezervua me sukses.');
+      window.setTimeout(() => setBookingSuccess(''), 5000);
     } catch (err) {
       console.error(err);
       setBookingError(err.message);
@@ -237,6 +338,8 @@ function PatientAppointments() {
 
   const openModal = () => {
     setBookingError('');
+    setBookingSuccess('');
+    setVisibleMonth(getLocalDate(selectedDate || todayDate));
     setModalOpen(true);
   };
   const closeModal = () => setModalOpen(false);
@@ -288,6 +391,13 @@ function PatientAppointments() {
             Book Appointment
           </button>
         </header>
+
+        {bookingSuccess && (
+          <div className="mb-6 rounded-xl border border-[#ceead6] bg-[#e6f4ea] px-4 py-3 text-[#137333] text-label-bold flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px]">check_circle</span>
+            <span>{bookingSuccess}</span>
+          </div>
+        )}
 
         <section className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 bg-surface-container-lowest p-4 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] border border-outline-variant/20">
           <div className="flex flex-wrap gap-2">
@@ -417,7 +527,7 @@ function PatientAppointments() {
         >
           <form
             onSubmit={handleBookAppointment}
-            className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            className="bg-surface-container-lowest w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="p-6 border-b border-outline-variant/20 flex justify-between items-center">
@@ -431,7 +541,7 @@ function PatientAppointments() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto">
               {bookingError && (
                 <div className="p-3 bg-error-container/30 text-error text-sm rounded border border-error-container">
                   {bookingError}
@@ -465,24 +575,80 @@ function PatientAppointments() {
                 >
                   {treatments.map((t) => (
                     <option key={t.treatment_id} value={t.treatment_id}>
-                      {t.treatment_name} - ${parseFloat(t.price).toFixed(2)}
+                      {t.treatment_name} - {formatDuration(t.average_duration)} - ${parseFloat(t.price).toFixed(2)}
                     </option>
                   ))}
                   {treatments.length === 0 && <option>Nuk ka trajtime të disponueshme</option>}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-label-bold text-on-surface-variant mb-2">Zgjidh Datën *</label>
-                  <input
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-body-base"
-                    type="date"
-                    min={todayDate}
-                    required
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block font-label-bold text-on-surface-variant">Zgjidh Datën *</label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-variant text-on-surface-variant"
+                        title="Muaji i kaluar"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                      </button>
+                      <span className="text-label-base font-label-bold text-on-surface min-w-28 text-center">
+                        {visibleMonthLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-variant text-on-surface-variant"
+                        title="Muaji tjeter"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-caption">
+                    {weekDays.map((day) => (
+                      <span
+                        key={day}
+                        className={`py-1 font-label-bold ${day === 'Sun' ? 'text-error' : 'text-on-surface-variant'}`}
+                      >
+                        {day}
+                      </span>
+                    ))}
+                    {calendarDays.map((date, index) => {
+                      if (!date) return <span key={`empty-${index}`} className="h-9" />;
+
+                      const dateString = toDateString(date);
+                      const isSelected = selectedDate === dateString;
+                      const isPast = dateString < todayDate;
+                      const isSunday = date.getDay() === 0;
+                      const disabled = isPast || isSunday;
+
+                      return (
+                        <button
+                          key={dateString}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            setSelectedDate(dateString);
+                            setBookingError('');
+                          }}
+                          className={`h-9 rounded-lg font-label-bold transition-colors ${
+                            isSelected
+                              ? 'bg-primary text-on-primary'
+                              : isSunday
+                                ? 'bg-error-container/30 text-error'
+                                : 'text-on-surface hover:bg-primary/10'
+                          } ${disabled ? 'opacity-60 cursor-not-allowed hover:bg-error-container/30' : ''}`}
+                          title={isSunday ? 'Klinika nuk punon te dielave' : dateString}
+                        >
+                          {date.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div>
@@ -492,13 +658,25 @@ function PatientAppointments() {
                     onChange={(e) => setSelectedTime(e.target.value)}
                     className="w-full px-4 py-2 bg-surface border border-outline-variant/50 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary text-body-base"
                     required
+                    disabled={!selectedDate || slotsLoading || availableSlots.length === 0}
                   >
-                    {defaultTimeSlots.map((slot) => (
-                      <option key={slot} value={slot}>
-                        {formatTimeLabel(slot)}
+                    <option value="">
+                      {slotsLoading ? 'Duke kontrolluar oraret...' : 'Zgjidhni orarin'}
+                    </option>
+                    {availableSlots.map((slot) => (
+                      <option key={slot.time} value={slot.time} disabled={!slot.available} title={slot.reason || ''}>
+                        {formatTimeLabel(slot.time)}{slot.available ? '' : ` - ${slot.reason || 'i zene'}`}
                       </option>
                     ))}
                   </select>
+                  {selectedDate && !slotsLoading && availableSlots.length > 0 && !availableSlots.some((slot) => slot.available) && (
+                    <p className="mt-2 text-caption text-error">
+                      Nuk ka orare te lira per kete dentist ne daten e zgjedhur.
+                    </p>
+                  )}
+                  <p className="mt-2 text-caption text-on-surface-variant">
+                    Orari i klinikes: 08:00-20:00, cdo 30 minuta. Trajtimi i zgjedhur zgjat {formatDuration(selectedTreatmentDetails?.average_duration)}.
+                  </p>
                 </div>
               </div>
 
@@ -516,7 +694,7 @@ function PatientAppointments() {
             <div className="p-6 bg-surface-container-low">
               <button
                 type="submit"
-                disabled={bookingLoading}
+                disabled={bookingLoading || !selectedTime}
                 className="w-full bg-primary text-on-primary font-label-bold py-3 rounded-full hover:bg-primary-container transition-colors shadow-sm active:scale-[0.98] disabled:opacity-60"
               >
                 {bookingLoading ? 'Duke rezervuar...' : 'Konfirmo Rezervimin'}
