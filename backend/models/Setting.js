@@ -2,7 +2,7 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const defaultSettings = {
-  clinic_name: 'DentaCare Pro',
+  clinic_name: 'UBT Dent',
   clinic_address: '',
   clinic_phone: '',
   clinic_email: '',

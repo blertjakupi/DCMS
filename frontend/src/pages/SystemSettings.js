@@ -4,7 +4,7 @@ import HeaderActions from '../components/HeaderActions';
 import { authFetch } from '../utils/authFetch';
 
 const defaultSettings = {
-  clinic_name: 'DentaCare Pro',
+  clinic_name: 'UBT Dent',
   clinic_address: '',
   clinic_phone: '',
   clinic_email: '',

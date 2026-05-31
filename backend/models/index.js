@@ -20,6 +20,7 @@ const InventoryItem = require('./InventoryItem');
 const InventoryTransaction = require('./InventoryTransaction');
 const DentistAvailability = require('./DentistAvailability');
 const Setting = require('./Setting');
+const ContactMessage = require('./ContactMessage');
 
 User.belongsTo(Role, { foreignKey: 'role_id' });
 Role.hasMany(User, { foreignKey: 'role_id' });
@@ -228,5 +229,6 @@ module.exports = {
   InventoryItem,
   InventoryTransaction,
   DentistAvailability,
-  Setting
+  Setting,
+  ContactMessage
 };

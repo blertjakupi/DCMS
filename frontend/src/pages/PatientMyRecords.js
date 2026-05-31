@@ -52,8 +52,8 @@ function PatientMyRecords() {
       <div class="a4-canvas" style="width: 100%; max-width: 800px; min-height: 1123px; margin: 0 auto; background: white; box-shadow: none; padding: 60px 48px; font-family: 'Inter', sans-serif;">
         <!-- Brand Header -->
         <header style="display: flex; flex-direction: column; align-items: center; margin-bottom: 32px;">
-          <img src="/DentaCareLogo.png" alt="DentaCare Pro Logo" style="height: 64px; width: auto; margin-bottom: 16px; object-fit: contain;" onerror="this.style.display='none'">
-          <h1 style="font-family: 'Manrope', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #004943; margin: 0;">DentaCare Pro</h1>
+          <div style="width: 64px; height: 64px; border-radius: 18px; background: #e8f7f5; color: #004943; display: flex; align-items: center; justify-content: center; font-family: 'Material Symbols Outlined'; font-size: 38px; font-variation-settings: 'FILL' 1; margin-bottom: 16px;">dentistry</div>
+          <h1 style="font-family: 'Manrope', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #004943; margin: 0;">UBT Dent</h1>
           <div style="margin-top: 32px; display: flex; flex-direction: column; align-items: center; width: 100%;">
             <p style="font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #3f4947; margin-bottom: 8px;">Dental Diagnosis Report</p>
             <div style="height: 2px; width: 48px; background-color: #004943; border-radius: 9999px;"></div>
@@ -125,7 +125,7 @@ function PatientMyRecords() {
         <!-- Footer -->
         <footer style="margin-top: 32px; border-top: 1px solid #bec9c6; padding-top: 16px; text-align: center;">
           <div style="display: flex; flex-direction: column; gap: 4px;">
-            <p style="font-size: 14px; line-height: 20px; color: #3f4947; margin: 0;">DentaCare Pro – Dukagjini Center, Prishtina, Kati 3 | Tel: +383 44 111 222</p>
+            <p style="font-size: 14px; line-height: 20px; color: #3f4947; margin: 0;">UBT Dent - Dukagjini Center, Prishtina, Kati 3</p>
             <p style="font-size: 12px; line-height: 16px; color: #6f7977; font-style: italic; margin: 0;">This document is electronically generated and does not require a physical signature.</p>
             <p style="font-weight: 700; font-size: 12px; line-height: 16px; color: #3f4947; margin-top: 8px;">Generated on ${new Date().toLocaleDateString()}</p>
           </div>

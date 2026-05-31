@@ -36,11 +36,17 @@ function PatientNavbar() {
           >
             dentistry
           </span>
-          <span className="text-[24px] font-bold text-primary tracking-tight">DentaCare Pro</span>
+          <span className="text-[24px] font-bold text-primary tracking-tight">UBT Dent</span>
         </div>
 
         {/* Nav Links */}
         <div className="hidden md:flex gap-8">
+          <button
+            onClick={() => navigate('/')}
+            className="text-[14px] font-medium transition-colors duration-200 pb-1 text-on-surface-variant hover:text-primary"
+          >
+            Home
+          </button>
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (

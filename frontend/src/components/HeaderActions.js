@@ -28,12 +28,14 @@ function HeaderActions() {
 
   const [reminderDropdownOpen, setReminderDropdownOpen] = useState(false);
   const [recentReminders, setRecentReminders] = useState([]);
+  const [contactMessages, setContactMessages] = useState([]);
   const [reminderLoading, setReminderLoading] = useState(false);
   const buttonRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
   const isDentist = location.pathname.startsWith('/dentist') || location.pathname === '/dashboard';
   const isReceptionist = user.roles?.[0] === 'RECEPTIONIST' || location.pathname.startsWith('/receptionist');
+  const isAdmin = user.roles?.[0] === 'ADMIN';
   const remindersPath = isDentist ? '/dentist/reminders' : '/admin/reminders';
   const settingsPath = isDentist
     ? '/dentist/reminders'
@@ -72,9 +74,17 @@ function HeaderActions() {
       });
     }
     setReminderDropdownOpen(true);
-    if (recentReminders.length === 0 && !reminderLoading) {
+    if (!reminderLoading) {
       setReminderLoading(true);
       try {
+        if (isAdmin) {
+          const contactRes = await authFetchLocal('/api/contact-messages');
+          if (contactRes.ok) {
+            const contactJson = await contactRes.json();
+            setContactMessages((contactJson.data || []).slice(0, 5));
+          }
+        }
+
         let res = await authFetchLocal('/api/reminders?limit=3&sort=-created_at');
         if (!res.ok) {
           res = await authFetchLocal('/api/reminders');
@@ -113,8 +123,28 @@ function HeaderActions() {
     return 'Unknown';
   };
 
+  const markContactMessageRead = async (messageId) => {
+    try {
+      const res = await authFetchLocal(`/api/contact-messages/${messageId}/read`, { method: 'PUT' });
+      if (!res.ok) throw new Error('Could not mark message as read');
+      setContactMessages((previous) =>
+        previous.map((message) =>
+          message.contact_message_id === messageId ? { ...message, status: 'Read' } : message
+        )
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const unreadContactCount = contactMessages.filter((message) => message.status === 'Unread').length;
+
   return (
     <div className="flex items-center gap-4 ml-auto">
+      <button className={iconButtonClass} onClick={() => navigate('/')} title="Home">
+        <span className="material-symbols-outlined">home</span>
+      </button>
+
       <button className={iconButtonClass} onClick={() => navigate(settingsPath)} title="Settings">
         <span className="material-symbols-outlined">settings</span>
       </button>
@@ -122,7 +152,11 @@ function HeaderActions() {
       <div className="relative" ref={buttonRef}>
         <button className={iconButtonClass} onClick={toggleReminderDropdown} title="Notifications">
           <span className="material-symbols-outlined">notifications</span>
-          <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
+          {(unreadContactCount > 0 || recentReminders.length > 0) && (
+            <span className="absolute top-1 right-1 min-w-4 h-4 bg-error text-on-error rounded-full border border-surface text-[10px] leading-4 text-center px-1">
+              {unreadContactCount || recentReminders.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -153,25 +187,53 @@ function HeaderActions() {
           style={{ top: dropdownPosition.top, right: dropdownPosition.right, zIndex: 10000 }}
         >
           <div className="p-3 border-b border-outline-variant/20">
-            <span className="text-sm font-semibold text-on-surface">Recent Reminders</span>
+            <span className="text-sm font-semibold text-on-surface">Notifications</span>
           </div>
           <div className="max-h-80 overflow-y-auto">
             {reminderLoading ? (
               <div className="flex justify-center py-6">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
               </div>
-            ) : recentReminders.length === 0 ? (
-              <div className="text-center text-on-surface-variant py-6 text-sm">No recent reminders.</div>
+            ) : contactMessages.length === 0 && recentReminders.length === 0 ? (
+              <div className="text-center text-on-surface-variant py-6 text-sm">No recent notifications.</div>
             ) : (
-              <ul className="divide-y divide-outline-variant/20">
-                {recentReminders.map((reminder) => (
-                  <li key={reminder.reminder_id} className="p-3 hover:bg-surface-container-low transition-colors">
-                    <p className="font-medium text-on-surface text-sm">{getPatientName(reminder)}</p>
-                    <p className="text-xs text-on-surface-variant mt-0.5">{reminder.reminder_type || reminder.type || 'Reminder'}</p>
-                    <p className="text-xs text-outline mt-0.5">{formatReminderDate(reminder)}</p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {contactMessages.length > 0 && (
+                  <ul className="divide-y divide-outline-variant/20">
+                    {contactMessages.map((message) => (
+                      <li key={`contact-${message.contact_message_id}`} className="p-3 hover:bg-surface-container-low transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-on-surface text-sm">
+                            {message.first_name} {message.last_name}
+                          </p>
+                          {message.status === 'Unread' && (
+                            <button
+                              className="text-[10px] font-semibold text-error bg-error-container px-2 py-0.5 rounded-full"
+                              type="button"
+                              onClick={() => markContactMessageRead(message.contact_message_id)}
+                            >
+                              New
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs text-on-surface-variant mt-0.5">Contact: {message.phone_number}</p>
+                        <p className="text-xs text-on-surface mt-1 max-h-8 overflow-hidden">{message.message}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {recentReminders.length > 0 && (
+                  <ul className="divide-y divide-outline-variant/20 border-t border-outline-variant/20">
+                    {recentReminders.map((reminder) => (
+                      <li key={`reminder-${reminder.reminder_id}`} className="p-3 hover:bg-surface-container-low transition-colors">
+                        <p className="font-medium text-on-surface text-sm">{getPatientName(reminder)}</p>
+                        <p className="text-xs text-on-surface-variant mt-0.5">{reminder.reminder_type || reminder.type || 'Reminder'}</p>
+                        <p className="text-xs text-outline mt-0.5">{formatReminderDate(reminder)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             )}
           </div>
           <div className="p-2 border-t border-outline-variant/20 text-center">

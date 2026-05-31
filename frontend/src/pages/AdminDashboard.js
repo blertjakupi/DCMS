@@ -170,7 +170,7 @@ function AdminDashboard() {
         fetchJson(`/api/appointments/count?date=${today}&status=Scheduled`),
         fetchJson(`/api/payments/sum?from=${currentMonth.from}&to=${currentMonth.to}`),
         fetchJson('/api/users?limit=1000&sort=-created_at'),
-        fetchJson('/api/inventory-items?limit=1000'),
+        fetchJson('/api/inventory-items/low-stock'),
         fetchJson('/api/invoices?limit=1000'),
         fetchJson('/api/reminders?limit=1000'),
         fetchJson(`/api/payments/sum?from=${previousMonth.from}&to=${previousMonth.to}`),
@@ -230,12 +230,28 @@ function AdminDashboard() {
 
       const alertsArray = [];
       const inventory = inventoryData.data || [];
-      const lowStockItems = inventory.filter((item) => (item.quantity || 0) < 10);
-      if (lowStockItems.length > 0) {
+      const outOfStockItems = inventory.filter((item) => Number(item.quantity_in_stock || 0) <= 0);
+      const lowStockItems = inventory.filter((item) => {
+        const quantity = Number(item.quantity_in_stock || 0);
+        const minimumStock = Number(item.minimum_stock || 0);
+        return quantity > 0 && quantity <= minimumStock;
+      });
+      const stockAlertItems = [...outOfStockItems, ...lowStockItems];
+      if (stockAlertItems.length > 0) {
+        const itemNames = stockAlertItems
+          .slice(0, 3)
+          .map((item) => item.item_name)
+          .join(', ');
+        const remainingCount = stockAlertItems.length > 3 ? `, +${stockAlertItems.length - 3} more` : '';
+        const stockSummary = [
+          outOfStockItems.length ? `${outOfStockItems.length} out of stock` : null,
+          lowStockItems.length ? `${lowStockItems.length} low stock` : null,
+        ].filter(Boolean).join(', ');
+
         alertsArray.push({
           icon: 'inventory_2',
-          title: 'Low Inventory Warning',
-          desc: `${lowStockItems.length} item(s) low on stock. Reorder recommended.`,
+          title: 'Inventory Stock Warning',
+          desc: `${stockSummary}: ${itemNames}${remainingCount}. Reorder recommended.`,
           action: 'Order Now',
           path: '/admin/inventory',
           actionColor: 'text-primary',

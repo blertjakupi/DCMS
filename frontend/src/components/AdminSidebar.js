@@ -47,7 +47,7 @@ function AdminSidebar() {
         <span className="material-symbols-outlined text-[32px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>
           dentistry
         </span>
-        <h1 className="text-[24px] font-bold text-primary tracking-tight whitespace-nowrap ">DentaCare Pro</h1>
+        <h1 className="text-[24px] font-bold text-primary tracking-tight whitespace-nowrap ">UBT Dent</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-1">
@@ -95,6 +95,14 @@ function AdminSidebar() {
       </div>
 
       <div className="mt-auto pt-4 border-t border-surface-variant space-y-1">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="w-full flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200"
+        >
+          <span className="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </button>
         <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition-colors duration-200">
           <span className="material-symbols-outlined">help</span>
           <span>Support</span>

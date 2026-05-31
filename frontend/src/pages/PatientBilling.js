@@ -64,7 +64,7 @@ function PatientBilling() {
     return invoices.map(inv => {
       const displayStatus = inv.status === 'Unpaid' ? 'Pending' : inv.status;
       const title = inv.InvoiceItems?.[0]?.Treatment?.treatment_name || 'Dental Care Treatment';
-      const provider = 'DentaCare Pro Clinic';
+      const provider = 'UBT Dent Clinic';
       const totalAmount = parseFloat(inv.total_amount || 0);
       const paidAmount = (inv.Payments || []).reduce((sum, payment) => sum + parseFloat(payment.amount || 0), 0);
       const balance = Math.max(totalAmount - paidAmount, 0);

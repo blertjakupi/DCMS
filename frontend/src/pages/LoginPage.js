@@ -146,7 +146,7 @@ function LoginPage() {
           <span className="material-symbols-outlined text-[64px] text-on-primary mb-5" style={{ fontVariationSettings: "'FILL' 1" }}>
             dentistry
           </span>
-          <h1 className="text-[32px] font-bold text-on-primary mb-3">DentaCare Pro</h1>
+          <h1 className="text-[32px] font-bold text-on-primary mb-3">UBT Dent</h1>
           <p className="text-[16px] text-primary-fixed-dim">Your dental health, simplified.</p>
         </div>
       </div>
@@ -159,7 +159,7 @@ function LoginPage() {
           <span className="material-symbols-outlined text-[40px] text-primary mb-2" style={{ fontVariationSettings: "'FILL' 1" }}>
             dentistry
           </span>
-          <h1 className="text-[24px] font-semibold text-on-surface">DentaCare Pro</h1>
+          <h1 className="text-[24px] font-semibold text-on-surface">UBT Dent</h1>
         </div>
 
         {/* Card */}

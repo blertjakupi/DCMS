@@ -21,11 +21,14 @@ const reminderRoutes = require('./routes/reminderRoutes');
 const inventoryItemRoutes = require('./routes/inventoryItemRoutes');
 const inventoryTransactionRoutes = require('./routes/inventoryTransactionRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const publicRoutes = require('./routes/publicRoutes');
+const contactMessageRoutes = require('./routes/contactMessageRoutes');
 
 const app = express();
 app.use(express.json());
 
 
+app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
@@ -40,6 +43,7 @@ app.use('/api/invoices',invoiceRoutes)
 app.use('/api/payments', paymentRoutes);
 app.use('/api/dental-records', dentalRecordRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/contact-messages', contactMessageRoutes);
 app.use('/api/inventory-items', inventoryItemRoutes);
 app.use('/api/inventory-transactions', inventoryTransactionRoutes);
 app.use('/api/settings', settingsRoutes);

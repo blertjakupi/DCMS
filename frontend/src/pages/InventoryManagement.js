@@ -148,6 +148,11 @@ function InventoryManagement() {
     });
   }, [items, search, stockFilter]);
 
+  const selectedTransactionItem = useMemo(
+    () => items.find((item) => String(item.item_id) === String(transactionForm.item_id)),
+    [items, transactionForm.item_id]
+  );
+
   const updateForm = (field, value) => {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
@@ -711,19 +716,22 @@ function InventoryManagement() {
           <div className="flex-1 overflow-y-auto p-gutter space-y-md">
             <div className="space-y-unit">
               <label className="font-label-bold text-on-surface-variant text-caption">Item</label>
-              <select
-                className="w-full px-4 py-3 rounded-xl bg-surface-container-low border-outline-variant focus:ring-2 focus:ring-primary/20 border text-body-base"
-                value={transactionForm.item_id}
-                onChange={(event) => updateTransactionForm('item_id', event.target.value)}
-                required
-              >
-                <option value="">Select item</option>
-                {items.map((item) => (
-                  <option key={item.item_id} value={item.item_id}>
-                    {item.item_name} ({item.quantity_in_stock} {item.unit})
-                  </option>
-                ))}
-              </select>
+              <input type="hidden" value={transactionForm.item_id} required readOnly />
+              <div className="w-full px-4 py-3 rounded-xl bg-surface-container-high border border-outline-variant text-body-base text-on-surface">
+                {selectedTransactionItem ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-label-bold">{selectedTransactionItem.item_name}</p>
+                      <p className="text-caption text-on-surface-variant">#INV-{selectedTransactionItem.item_id}</p>
+                    </div>
+                    <span className="text-caption text-on-surface-variant whitespace-nowrap">
+                      {selectedTransactionItem.quantity_in_stock} {selectedTransactionItem.unit}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-on-surface-variant">No item selected</span>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-md">
