@@ -6,8 +6,21 @@ const formatNumber = (value) => Number(value || 0).toLocaleString('en-US');
 const initialsFromName = (firstName, lastName) =>
   `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'DC';
 
+const getDashboardPath = (role) => {
+  if (role === 'ADMIN') return '/admin/dashboard';
+  if (role === 'DENTIST') return '/dentist/dashboard';
+  if (role === 'PATIENT') return '/patient/dashboard';
+  if (role === 'RECEPTIONIST') return '/receptionist/dashboard';
+  return '/dashboard';
+};
+
 function PublicClinicPage() {
   const navigate = useNavigate();
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const accessToken = localStorage.getItem('accessToken');
+  const userRole = storedUser.roles?.[0];
+  const isAuthenticated = Boolean(accessToken && userRole);
+  const dashboardPath = getDashboardPath(userRole);
   const [stats, setStats] = useState({ patients: 0, dentists: 0, years: 12, services: 8 });
   const [dentists, setDentists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,8 +111,11 @@ function PublicClinicPage() {
             <a className="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-colors" href="#history">Historiku</a>
             <a className="px-3 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/10 transition-colors" href="#contact">Kontakti</a>
           </nav>
-          <Link className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-semibold hover:bg-on-primary-fixed-variant transition-colors" to="/login">
-            Kyqu
+          <Link
+            className="bg-primary text-on-primary px-4 py-2 rounded-lg text-[14px] font-semibold hover:bg-on-primary-fixed-variant transition-colors"
+            to={isAuthenticated ? dashboardPath : '/login'}
+          >
+            {isAuthenticated ? 'Dashboard' : 'Kyqu'}
           </Link>
         </div>
       </header>
@@ -123,9 +139,14 @@ function PublicClinicPage() {
                   Shiko ekipin
                   <span className="material-symbols-outlined text-[20px]">arrow_downward</span>
                 </a>
-                <Link className="inline-flex items-center justify-center gap-2 border border-secondary text-secondary px-6 py-3 rounded-xl font-semibold hover:bg-secondary-container/20 transition-colors" to="/login">
-                  Kyqu
-                  <span className="material-symbols-outlined text-[20px]">login</span>
+                <Link
+                  className="inline-flex items-center justify-center gap-2 border border-secondary text-secondary px-6 py-3 rounded-xl font-semibold hover:bg-secondary-container/20 transition-colors"
+                  to={isAuthenticated ? dashboardPath : '/login'}
+                >
+                  {isAuthenticated ? 'Kthehu ne dashboard' : 'Kyqu'}
+                  <span className="material-symbols-outlined text-[20px]">
+                    {isAuthenticated ? 'dashboard' : 'login'}
+                  </span>
                 </Link>
               </div>
             </div>

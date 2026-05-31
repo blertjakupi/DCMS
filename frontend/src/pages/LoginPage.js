@@ -1,5 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+
+const getDashboardPath = (role) => {
+  if (role === 'ADMIN') return '/admin/dashboard';
+  if (role === 'DENTIST') return '/dentist/dashboard';
+  if (role === 'PATIENT') return '/patient/dashboard';
+  if (role === 'RECEPTIONIST') return '/receptionist/dashboard';
+  return '/dashboard';
+};
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -18,6 +26,16 @@ function LoginPage() {
   const [resetError, setResetError] = useState('');
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const role = user.roles?.[0];
+
+    if (token && role) {
+      navigate(getDashboardPath(role), { replace: true });
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,12 +62,8 @@ function LoginPage() {
       localStorage.setItem('refreshToken', data.refreshToken);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-     const role = data.user.roles?.[0];
-	if (role === 'ADMIN') navigate('/admin/dashboard');
-	else if (role === 'DENTIST') navigate('/dentist/dashboard');
-	else if (role === 'PATIENT') navigate('/portal/dashboard');
-	else if (role === 'RECEPTIONIST') navigate('/receptionist/dashboard');
-	else navigate('/dashboard');
+      const role = data.user.roles?.[0];
+      navigate(getDashboardPath(role));
     } catch (err) {
       setError(err.message);
     } finally {
