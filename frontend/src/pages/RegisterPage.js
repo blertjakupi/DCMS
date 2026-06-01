@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 function RegisterPage() {
+  const today = new Date();
+  const maxDob = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -34,6 +41,11 @@ function RegisterPage() {
 
     if (!formData.hipaa) {
       setError('You must agree to the HIPAA privacy terms.');
+      return;
+    }
+
+    if (formData.dob && formData.dob > maxDob) {
+      setError('Date of birth cannot be in the future.');
       return;
     }
 
@@ -136,6 +148,7 @@ function RegisterPage() {
                 <input
                   className="w-full px-3 py-[10px] border border-outline-variant rounded bg-surface-container-lowest text-on-surface text-[15px] focus:outline-none focus:border-primary focus:border-[2px] transition-all"
                   id="dob" name="dob" type="date"
+                  max={maxDob}
                   value={formData.dob} onChange={handleChange}
                 />
               </div>
