@@ -23,10 +23,49 @@ const inventoryTransactionRoutes = require('./routes/inventoryTransactionRoutes'
 const settingsRoutes = require('./routes/settingsRoutes');
 const publicRoutes = require('./routes/publicRoutes');
 const contactMessageRoutes = require('./routes/contactMessageRoutes');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 app.use(express.json());
 
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'DCMS API',
+      version: '1.0.0',
+      description: 'Dental Clinic Management System API documentation'
+    },
+    servers: [
+      {
+        url: '/api',
+        description: 'API base path'
+      }
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      },
+      schemas: {
+        Error: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          }
+        }
+      }
+    }
+  },
+  apis: ['./routes/*.js']
+};
+
+const swaggerSpecs = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
@@ -75,9 +114,3 @@ sequelize.authenticate()
   .catch((error) => {
     console.error('Error connecting to database:', error);
   });
-
-const swaggerJsdoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
-const options = { definition: { openapi: '3.0.0', info: { title: 'API', version: '1.0.0' } }, apis: ['./routes/*.js'] };
-const specs = swaggerJsdoc(options);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
